@@ -12,6 +12,7 @@ const subjectiveScores = ref({})
 const isSubmitted = ref(false)
 const remainingTime = ref(0)
 const timerId = ref(null)
+const submitType = ref('')
 const examId = computed(() => route.params.examId)
 
 const currentExam = computed(() => {
@@ -221,6 +222,7 @@ const getKnowledgeAdvice = (pointName) => {
 const startExam = () => {
   isStarted.value = true
   isSubmitted.value = false
+  submitType.value = ''
   currentQuestionIndex.value = 0
   remainingTime.value = currentExam.value?.timeLimit || 0
   startTimer()
@@ -239,7 +241,10 @@ const startTimer = () => {
   timerId.value = setInterval(() => {
     if (remainingTime.value > 0) {
       remainingTime.value -= 1
+    return
     }
+
+    autoSubmitExam()
   }, 1000)
 }
 
@@ -277,6 +282,16 @@ const goToQuestion = (index) => {
   currentQuestionIndex.value = index
 }
 
+const autoSubmitExam = () => {
+  if (isSubmitted.value) {
+    return
+  }
+
+  isSubmitted.value = true
+  submitType.value = 'auto'
+  stopTimer()
+}
+
 const submitExam = () => {
   if (unansweredCount.value > 0) {
     const confirmed = window.confirm(
@@ -295,6 +310,7 @@ const submitExam = () => {
   }
 
   isSubmitted.value = true
+  submitType.value = 'manual'
   stopTimer()
 }
 
@@ -309,6 +325,7 @@ const restartExam = () => {
   subjectiveScores.value = {}
   currentQuestionIndex.value = 0
   isSubmitted.value = false
+  submitType.value = ''
   isStarted.value = true
   remainingTime.value = currentExam.value?.timeLimit || 0
   startTimer()
@@ -446,7 +463,9 @@ onBeforeUnmount(() => {
             已提交
           </span>
         </div>
-
+        <p v-if="submitType === 'auto'" class="result-desc">
+         考试时间已结束，系统已自动提交。系统已根据选择题自动评分，并结合主观题自评分生成当前成绩。
+        </p>
         <p class="result-desc">
          本次考试已完成提交，系统已根据选择题自动评分，并结合主观题自评分生成当前成绩。
        </p>
