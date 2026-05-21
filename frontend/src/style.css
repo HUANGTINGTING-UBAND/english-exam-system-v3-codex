@@ -558,7 +558,6 @@ h1 {
   gap: 12px;
   margin-top: 18px;
 }
-
 .score-item {
   background: white;
   padding: 16px;
@@ -627,4 +626,55 @@ h1 {
   border: 1px solid #d1d5db;
   border-radius: 10px;
   font-size: 16px;
+}
+.weak-points-section {
+  margin-top: 24px;
+}
+
+.weak-points-section h3 {
+  margin-bottom: 14px;
+  color: #166534;
+}
+
+.weak-point-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weak-point-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: white;
+}
+
+.weak-point-item strong {
+  color: #1f2937;
+}
+
+.weak-point-item p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.loss-rate {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+@media (max-width: 560px) {
+  .weak-point-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

@@ -5,7 +5,6 @@ import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
 const route = useRoute()
-
 const isStarted = ref(false)
 const currentQuestionIndex = ref(0)
 const userAnswers = ref({})
@@ -80,6 +79,42 @@ const accuracyRate = computed(() => {
   return Math.round((totalScore.value / currentExam.value.totalScore) * 100)
 })
 
+const weakKnowledgePoints = computed(() => {
+  const pointMap = {}
+
+  currentQuestions.value.forEach((question) => {
+    const pointName = question.knowledgePoint || '未分类'
+    const questionScore = getQuestionScore(question)
+
+    if (!pointMap[pointName]) {
+      pointMap[pointName] = {
+        name: pointName,
+        totalScore: 0,
+        earnedScore: 0,
+      }
+    }
+
+    pointMap[pointName].totalScore += question.score
+    pointMap[pointName].earnedScore += questionScore
+  })
+
+  return Object.values(pointMap)
+    .map((point) => {
+      const lostScore = point.totalScore - point.earnedScore
+      const lossRate = point.totalScore === 0
+        ? 0
+        : Math.round((lostScore / point.totalScore) * 100)
+
+      return {
+        ...point,
+        lostScore,
+        lossRate,
+      }
+    })
+    .sort((a, b) => b.lossRate - a.lossRate)
+    .slice(0, 3)
+})
+
 const getChoiceAnswerText = (question, answerIndex) => {
   if (answerIndex === undefined || answerIndex === '') {
     return '未作答'
@@ -103,7 +138,7 @@ const getQuestionScore = (question) => {
     return isChoiceCorrect(question) ? question.score : 0
   }
 
-  return 0
+  return Number(subjectiveScores.value[question.id] || 0)
 }
 
 const saveSubjectiveScore = (question, scoreValue) => {
@@ -359,6 +394,34 @@ const submitExam = () => {
            <span>选择题正确数</span>
            <strong>{{ correctChoiceCount }} / {{ choiceQuestions.length }}</strong>
          </div>
+       </div>
+       
+       <div class="weak-points-section">
+         <h3>薄弱项分析</h3>
+
+         <div v-if="weakKnowledgePoints.length > 0" class="weak-point-list">
+           <div
+             v-for="point in weakKnowledgePoints"
+             :key="point.name"
+             class="weak-point-item"
+            >
+             <div>
+               <strong>{{ point.name }}</strong>
+               <p>
+                 得分 {{ point.earnedScore }} / {{ point.totalScore }}，
+                 失分 {{ point.lostScore }} 分
+               </p>
+             </div>
+
+             <span class="loss-rate">
+               失分率 {{ point.lossRate }}%
+             </span>
+         </div>
+       
+        </div>
+         <p v-else class="empty-text">
+           暂无薄弱项数据。
+          </p>
        </div>
 
       </div>
