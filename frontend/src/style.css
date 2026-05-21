@@ -582,3 +582,26 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+.question-result-box {
+  margin-top: 24px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.question-result-box p {
+  margin: 8px 0;
+  line-height: 1.7;
+  color: #374151;
+}
+
+.result-correct {
+  color: #166534;
+  font-weight: 700;
+}
+
+.result-wrong {
+  color: #b91c1c;
+  font-weight: 700;
+}

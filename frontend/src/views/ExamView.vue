@@ -56,6 +56,31 @@ const correctChoiceCount = computed(() => {
     return userAnswer === question.answer
   }).length
 })
+const getChoiceAnswerText = (question, answerIndex) => {
+  if (answerIndex === undefined || answerIndex === '') {
+    return '未作答'
+  }
+
+  const optionText = question.options?.[answerIndex]
+
+  if (!optionText) {
+    return '未作答'
+  }
+
+  return `${String.fromCharCode(65 + answerIndex)}. ${optionText}`
+}
+
+const isChoiceCorrect = (question) => {
+  return userAnswers.value[question.id] === question.answer
+}
+
+const getQuestionScore = (question) => {
+  if (question.type === 'choice') {
+    return isChoiceCorrect(question) ? question.score : 0
+  }
+
+  return 0
+}
 
 const isCurrentQuestionAnswered = computed(() => {
   if (!currentQuestion.value) {
@@ -322,6 +347,52 @@ const submitExam = () => {
          @input="saveTextAnswer(currentQuestion.id, $event.target.value)"
         ></textarea>
         
+        <div v-if="isSubmitted" class="question-result-box">
+          <template v-if="currentQuestion.type === 'choice'">
+           <p>
+             <strong>你的答案：</strong>
+             {{ getChoiceAnswerText(currentQuestion, userAnswers[currentQuestion.id]) }}
+           </p>
+
+           <p>
+             <strong>正确答案：</strong>
+             {{ getChoiceAnswerText(currentQuestion, currentQuestion.answer) }}
+           </p>
+
+           <p>
+             <strong>结果：</strong>
+             <span :class="isChoiceCorrect(currentQuestion) ? 'result-correct' : 'result-wrong'">
+               {{ isChoiceCorrect(currentQuestion) ? '正确' : '错误' }}
+             </span>
+           </p>
+
+           <p>
+             <strong>得分：</strong>
+             {{ getQuestionScore(currentQuestion) }} / {{ currentQuestion.score }}
+           </p>
+         </template>
+
+         <template v-else>
+            <p>
+             <strong>你的答案：</strong>
+             {{ userAnswers[currentQuestion.id] || '未作答' }}
+           </p>
+
+           <p>
+             <strong>参考答案：</strong>
+             {{ currentQuestion.referenceAnswer || '暂无参考答案' }}
+           </p>
+
+           <p>
+             本题为主观题，后续步骤将加入自评分。
+           </p>
+         </template>
+
+           <p v-if="currentQuestion.explanation">
+              <strong>解析：</strong>{{ currentQuestion.explanation }}
+           </p>
+        </div>
+
         <div class="question-actions">
           <button
             class="secondary-btn"
