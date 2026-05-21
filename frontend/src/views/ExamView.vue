@@ -34,6 +34,29 @@ const unansweredCount = computed(() => {
   return currentQuestions.value.length - answeredCount.value
 })
 
+const choiceQuestions = computed(() => {
+  return currentQuestions.value.filter((question) => question.type === 'choice')
+})
+
+const objectiveScore = computed(() => {
+  return choiceQuestions.value.reduce((total, question) => {
+    const userAnswer = userAnswers.value[question.id]
+
+    if (userAnswer === question.answer) {
+      return total + question.score
+    }
+
+    return total
+  }, 0)
+})
+
+const correctChoiceCount = computed(() => {
+  return choiceQuestions.value.filter((question) => {
+    const userAnswer = userAnswers.value[question.id]
+    return userAnswer === question.answer
+  }).length
+})
+
 const isCurrentQuestionAnswered = computed(() => {
   if (!currentQuestion.value) {
     return false
@@ -236,10 +259,22 @@ const submitExam = () => {
         </button>
       </div>
       
-      <div v-if="isSubmitted" class="submit-result-box">
-        <h2>试卷已提交</h2>
-        <p>当前阶段已完成提交状态记录，后续将继续加入自动评分和结果分析。</p>
-      </div>
+     <div v-if="isSubmitted" class="submit-result-box">
+       <h2>试卷已提交</h2>
+       <p>当前阶段已完成选择题自动评分，主观题评分将在后续步骤继续完善。</p>
+
+       <div class="score-summary">
+        <div class="score-item">
+         <span>客观题得分</span>
+          <strong>{{ objectiveScore }} 分</strong>
+        </div>
+
+        <div class="score-item">
+         <span>选择题正确数</span>
+         <strong>{{ correctChoiceCount }} / {{ choiceQuestions.length }}</strong>
+        </div>
+       </div>
+     </div>
 
       <div v-if="currentQuestion" class="answer-question-card">
         <p class="question-index">

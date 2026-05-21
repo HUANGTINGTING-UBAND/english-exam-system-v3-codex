@@ -552,3 +552,33 @@ h1 {
   color: #6b7280;
   cursor: not-allowed;
 }
+.score-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.score-item {
+  background: white;
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.score-item span {
+  display: block;
+  margin-bottom: 8px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.score-item strong {
+  font-size: 22px;
+  color: #166534;
+}
+
+@media (max-width: 560px) {
+  .score-summary {
+    grid-template-columns: 1fr;
+  }
+}
