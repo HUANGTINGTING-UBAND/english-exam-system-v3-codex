@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
@@ -10,6 +10,8 @@ const currentQuestionIndex = ref(0)
 const userAnswers = ref({})
 const subjectiveScores = ref({})
 const isSubmitted = ref(false)
+const remainingTime = ref(0)
+const timerId = ref(null)
 const examId = computed(() => route.params.examId)
 
 const currentExam = computed(() => {
@@ -180,6 +182,16 @@ const formatTimeLimit = (seconds) => {
   return Math.round(seconds / 60)
 }
 
+const formatCountdown = (seconds) => {
+  const minutes = Math.floor(seconds / 60)
+  const restSeconds = seconds % 60
+
+  const paddedMinutes = String(minutes).padStart(2, '0')
+  const paddedSeconds = String(restSeconds).padStart(2, '0')
+
+  return `${paddedMinutes}:${paddedSeconds}`
+}
+
 const questionTypeMap = {
   choice: '单选题',
   translation: '翻译题',
@@ -208,7 +220,27 @@ const getKnowledgeAdvice = (pointName) => {
 
 const startExam = () => {
   isStarted.value = true
+  isSubmitted.value = false
   currentQuestionIndex.value = 0
+  remainingTime.value = currentExam.value?.timeLimit || 0
+  startTimer()
+}
+
+const stopTimer = () => {
+  if (timerId.value) {
+    clearInterval(timerId.value)
+    timerId.value = null
+  }
+}
+
+const startTimer = () => {
+  stopTimer()
+
+  timerId.value = setInterval(() => {
+    if (remainingTime.value > 0) {
+      remainingTime.value -= 1
+    }
+  }, 1000)
 }
 
 const goBackToPreview = () => {
@@ -263,6 +295,7 @@ const submitExam = () => {
   }
 
   isSubmitted.value = true
+  stopTimer()
 }
 
 const restartExam = () => {
@@ -277,7 +310,13 @@ const restartExam = () => {
   currentQuestionIndex.value = 0
   isSubmitted.value = false
   isStarted.value = true
+  remainingTime.value = currentExam.value?.timeLimit || 0
+  startTimer()
 }
+
+onBeforeUnmount(() => {
+  stopTimer()
+})
 
 </script>
 
@@ -356,6 +395,10 @@ const restartExam = () => {
          <p class="answer-progress">
          已答 {{ answeredCount }} / 共 {{ currentQuestions.length }} 题
          </p>
+       </div>
+      
+       <div class="timer-box">
+          剩余时间：{{ formatCountdown(remainingTime) }}
        </div>
 
        <div class="answer-header-actions">
