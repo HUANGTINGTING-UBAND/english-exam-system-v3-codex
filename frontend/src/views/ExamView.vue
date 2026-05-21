@@ -379,11 +379,23 @@ const submitExam = () => {
       </div>
       
       <div v-if="isSubmitted" class="submit-result-box">
-       <h2>试卷已提交</h2>
-       <p>当前阶段已完成选择题自动评分，主观题评分将在后续步骤继续完善。</p>
+       <div class="result-header">
+         <div>
+           <p class="tag">Result</p>
+             <h2>考试结果</h2>
+          </div>
+
+          <span class="submitted-badge">
+            已提交
+          </span>
+        </div>
+
+        <p class="result-desc">
+         本次考试已完成提交，系统已根据选择题自动评分，并结合主观题自评分生成当前成绩。
+       </p>
 
        <div class="score-summary">
-         <div class="score-item">
+         <div class="score-item score-main">
            <span>最终得分</span>
            <strong>{{ totalScore }} / {{ currentExam.totalScore }}</strong>
          </div>
