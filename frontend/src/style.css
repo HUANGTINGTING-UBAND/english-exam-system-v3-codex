@@ -605,3 +605,26 @@ h1 {
   color: #b91c1c;
   font-weight: 700;
 }
+.subjective-score-control {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 14px;
+  background: white;
+}
+
+.subjective-score-control label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #374151;
+  font-weight: 600;
+}
+
+.subjective-score-control input {
+  width: 90px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 16px;
+}

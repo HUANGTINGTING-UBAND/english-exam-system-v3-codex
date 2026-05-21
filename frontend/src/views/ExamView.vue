@@ -9,6 +9,7 @@ const route = useRoute()
 const isStarted = ref(false)
 const currentQuestionIndex = ref(0)
 const userAnswers = ref({})
+const subjectiveScores = ref({})
 const isSubmitted = ref(false)
 const examId = computed(() => route.params.examId)
 
@@ -37,6 +38,9 @@ const unansweredCount = computed(() => {
 const choiceQuestions = computed(() => {
   return currentQuestions.value.filter((question) => question.type === 'choice')
 })
+const subjectiveQuestions = computed(() => {
+  return currentQuestions.value.filter((question) => question.type !== 'choice')
+})
 
 const objectiveScore = computed(() => {
   return choiceQuestions.value.reduce((total, question) => {
@@ -56,6 +60,18 @@ const correctChoiceCount = computed(() => {
     return userAnswer === question.answer
   }).length
 })
+
+const subjectiveScore = computed(() => {
+  return subjectiveQuestions.value.reduce((total, question) => {
+    const score = Number(subjectiveScores.value[question.id] || 0)
+    return total + score
+  }, 0)
+})
+
+const totalScore = computed(() => {
+  return objectiveScore.value + subjectiveScore.value
+})
+
 const getChoiceAnswerText = (question, answerIndex) => {
   if (answerIndex === undefined || answerIndex === '') {
     return '未作答'
@@ -80,6 +96,27 @@ const getQuestionScore = (question) => {
   }
 
   return 0
+}
+
+const saveSubjectiveScore = (question, scoreValue) => {
+  const score = Number(scoreValue)
+
+  if (Number.isNaN(score)) {
+    subjectiveScores.value[question.id] = 0
+    return
+  }
+
+  if (score < 0) {
+    subjectiveScores.value[question.id] = 0
+    return
+  }
+
+  if (score > question.score) {
+    subjectiveScores.value[question.id] = question.score
+    return
+  }
+
+  subjectiveScores.value[question.id] = score
 }
 
 const isCurrentQuestionAnswered = computed(() => {
@@ -289,15 +326,25 @@ const submitExam = () => {
        <p>当前阶段已完成选择题自动评分，主观题评分将在后续步骤继续完善。</p>
 
        <div class="score-summary">
-        <div class="score-item">
-         <span>客观题得分</span>
-          <strong>{{ objectiveScore }} 分</strong>
-        </div>
+         <div class="score-item">
+           <span>客观题得分</span>
+           <strong>{{ objectiveScore }} 分</strong>
+         </div>
 
-        <div class="score-item">
-         <span>选择题正确数</span>
-         <strong>{{ correctChoiceCount }} / {{ choiceQuestions.length }}</strong>
-        </div>
+         <div class="score-item">
+           <span>主观题自评分</span>
+           <strong>{{ subjectiveScore }} 分</strong>
+         </div>
+
+         <div class="score-item">
+           <span>当前总分</span>
+           <strong>{{ totalScore }} 分</strong>
+         </div>
+
+         <div class="score-item">
+           <span>选择题正确数</span>
+           <strong>{{ correctChoiceCount }} / {{ choiceQuestions.length }}</strong>
+         </div>
        </div>
      </div>
 
@@ -373,7 +420,7 @@ const submitExam = () => {
          </template>
 
          <template v-else>
-            <p>
+           <p>
              <strong>你的答案：</strong>
              {{ userAnswers[currentQuestion.id] || '未作答' }}
            </p>
@@ -383,9 +430,19 @@ const submitExam = () => {
              {{ currentQuestion.referenceAnswer || '暂无参考答案' }}
            </p>
 
-           <p>
-             本题为主观题，后续步骤将加入自评分。
-           </p>
+           <div class="subjective-score-control">
+             <label>
+               本题自评分：
+               <input
+                 type="number"
+                 min="0"
+                 :max="currentQuestion.score"
+                 :value="subjectiveScores[currentQuestion.id] || 0"
+                 @input="saveSubjectiveScore(currentQuestion, $event.target.value)"
+               />
+               / {{ currentQuestion.score }} 分
+             </label>
+           </div>
          </template>
 
            <p v-if="currentQuestion.explanation">
