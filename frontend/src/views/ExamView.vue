@@ -265,6 +265,20 @@ const submitExam = () => {
   isSubmitted.value = true
 }
 
+const restartExam = () => {
+  const confirmed = window.confirm('确认重新考试吗？当前答案和分数将被清空。')
+
+  if (!confirmed) {
+    return
+  }
+
+  userAnswers.value = {}
+  subjectiveScores.value = {}
+  currentQuestionIndex.value = 0
+  isSubmitted.value = false
+  isStarted.value = true
+}
+
 </script>
 
 <template>
@@ -451,6 +465,16 @@ const submitExam = () => {
            暂无薄弱项数据。
           </p>
        </div>
+
+       <div class="result-actions">
+         <button class="primary-btn" @click="restartExam">
+           重新考试
+         </button>
+
+         <RouterLink class="secondary-btn" to="/exams">
+           返回试卷列表
+         </RouterLink>
+      </div>
 
       </div>
 

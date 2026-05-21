@@ -720,3 +720,21 @@ h1 {
     flex-direction: column;
   }
 }
+
+.result-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+@media (max-width: 560px) {
+  .result-actions {
+    flex-direction: column;
+  }
+
+  .result-actions .primary-btn,
+  .result-actions .secondary-btn {
+    width: 100%;
+  }
+}
