@@ -9,6 +9,7 @@ const route = useRoute()
 const isStarted = ref(false)
 const currentQuestionIndex = ref(0)
 const userAnswers = ref({})
+const isSubmitted = ref(false)
 const examId = computed(() => route.params.examId)
 
 const currentExam = computed(() => {
@@ -28,6 +29,9 @@ const answeredCount = computed(() => {
     const answer = userAnswers.value[question.id]
     return answer !== undefined && answer !== ''
   }).length
+})
+const unansweredCount = computed(() => {
+  return currentQuestions.value.length - answeredCount.value
 })
 
 const isCurrentQuestionAnswered = computed(() => {
@@ -90,6 +94,26 @@ const goToNextQuestion = () => {
 
 const goToQuestion = (index) => {
   currentQuestionIndex.value = index
+}
+
+const submitExam = () => {
+  if (unansweredCount.value > 0) {
+    const confirmed = window.confirm(
+      `你还有 ${unansweredCount.value} 道题未作答，确认提交吗？`
+    )
+
+    if (!confirmed) {
+      return
+    }
+  } else {
+    const confirmed = window.confirm('确认提交试卷吗？提交后将不能修改答案。')
+
+    if (!confirmed) {
+      return
+    }
+  }
+
+  isSubmitted.value = true
 }
 
 </script>
@@ -170,9 +194,15 @@ const goToQuestion = (index) => {
          </p>
        </div>
 
-       <button class="secondary-btn" @click="goBackToPreview">
-         返回说明页
-       </button>
+       <div class="answer-header-actions">
+         <button class="secondary-btn" @click="goBackToPreview">
+           返回说明页
+         </button>
+
+         <button class="primary-btn" @click="submitExam">
+           提交试卷
+         </button>
+       </div>
       </div>  
  
       <div class="question-nav">
@@ -189,7 +219,12 @@ const goToQuestion = (index) => {
          {{ index + 1 }}
         </button>
       </div>
-
+      
+      <div v-if="isSubmitted" class="submit-result-box">
+        <h2>试卷已提交</h2>
+        <p>当前阶段已完成提交状态记录，后续将继续加入自动评分和结果分析。</p>
+      </div>
+      
       <div v-if="currentQuestion" class="answer-question-card">
         <p class="question-index">
           第 {{ currentQuestionIndex + 1 }} 题 / 共 {{ currentQuestions.length }} 题
