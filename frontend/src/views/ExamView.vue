@@ -23,6 +23,22 @@ const currentQuestion = computed(() => {
   return currentQuestions.value[currentQuestionIndex.value]
 })
 
+const answeredCount = computed(() => {
+  return currentQuestions.value.filter((question) => {
+    const answer = userAnswers.value[question.id]
+    return answer !== undefined && answer !== ''
+  }).length
+})
+
+const isCurrentQuestionAnswered = computed(() => {
+  if (!currentQuestion.value) {
+    return false
+  }
+
+  const answer = userAnswers.value[currentQuestion.value.id]
+  return answer !== undefined && answer !== ''
+})
+
 const formatTimeLimit = (seconds) => {
   return Math.round(seconds / 60)
 }
@@ -137,19 +153,29 @@ const goToNextQuestion = () => {
 
     <div v-else-if="currentExam && isStarted" class="exam-answer-card">
       <div class="answer-header">
-        <div>
-          <p class="tag">Answering</p>
-          <h1>{{ currentExam.title }}</h1>
-        </div>
+       <div>
+         <p class="tag">Answering</p>
+         <h1>{{ currentExam.title }}</h1>
+         <p class="answer-progress">
+         已答 {{ answeredCount }} / 共 {{ currentQuestions.length }} 题
+         </p>
+       </div>
 
-        <button class="secondary-btn" @click="goBackToPreview">
-          返回说明页
-        </button>
+       <button class="secondary-btn" @click="goBackToPreview">
+         返回说明页
+       </button>
       </div>
 
       <div v-if="currentQuestion" class="answer-question-card">
         <p class="question-index">
           第 {{ currentQuestionIndex + 1 }} 题 / 共 {{ currentQuestions.length }} 题
+        </p>
+
+        <p
+         class="answer-status"
+         :class="{ answered: isCurrentQuestionAnswered }"
+        >
+         {{ isCurrentQuestionAnswered ? '当前题：已答' : '当前题：未答' }}
         </p>
 
         <h2>{{ currentQuestion.text }}</h2>
