@@ -8,7 +8,7 @@ const route = useRoute()
 
 const isStarted = ref(false)
 const currentQuestionIndex = ref(0)
-
+const userAnswers = ref({})
 const examId = computed(() => route.params.examId)
 
 const currentExam = computed(() => {
@@ -48,7 +48,13 @@ const startExam = () => {
 const goBackToPreview = () => {
   isStarted.value = false
 }
+const saveChoiceAnswer = (questionId, optionIndex) => {
+  userAnswers.value[questionId] = optionIndex
+}
 
+const saveTextAnswer = (questionId, answerText) => {
+  userAnswers.value[questionId] = answerText
+}
 const goToPreviousQuestion = () => {
   if (currentQuestionIndex.value > 0) {
     currentQuestionIndex.value -= 1
@@ -160,15 +166,22 @@ const goToNextQuestion = () => {
             :key="option"
             class="choice-option"
           >
-            <input type="radio" name="choice-answer" />
+            <input
+             type="radio"
+             :name="currentQuestion.id"
+             :checked="userAnswers[currentQuestion.id] === index"
+             @change="saveChoiceAnswer(currentQuestion.id, index)"
+            />
             <span>{{ String.fromCharCode(65 + index) }}. {{ option }}</span>
           </label>
         </div>
 
         <textarea
-          v-else
-          class="subjective-answer"
-          placeholder="请在这里输入你的答案"
+         v-else
+         class="subjective-answer"
+         placeholder="请在这里输入你的答案"
+         :value="userAnswers[currentQuestion.id] || ''"
+         @input="saveTextAnswer(currentQuestion.id, $event.target.value)"
         ></textarea>
         
         <div class="question-actions">
