@@ -72,6 +72,14 @@ const totalScore = computed(() => {
   return objectiveScore.value + subjectiveScore.value
 })
 
+const accuracyRate = computed(() => {
+  if (!currentExam.value || currentExam.value.totalScore === 0) {
+    return 0
+  }
+
+  return Math.round((totalScore.value / currentExam.value.totalScore) * 100)
+})
+
 const getChoiceAnswerText = (question, answerIndex) => {
   if (answerIndex === undefined || answerIndex === '') {
     return '未作答'
@@ -277,6 +285,7 @@ const submitExam = () => {
         返回试卷列表
       </RouterLink>
     </div>
+
     <div v-else-if="currentExam && isStarted" class="exam-answer-card">
       <div class="answer-header">
        <div>
@@ -321,11 +330,21 @@ const submitExam = () => {
         </button>
       </div>
       
-     <div v-if="isSubmitted" class="submit-result-box">
+      <div v-if="isSubmitted" class="submit-result-box">
        <h2>试卷已提交</h2>
        <p>当前阶段已完成选择题自动评分，主观题评分将在后续步骤继续完善。</p>
 
        <div class="score-summary">
+         <div class="score-item">
+           <span>最终得分</span>
+           <strong>{{ totalScore }} / {{ currentExam.totalScore }}</strong>
+         </div>
+
+         <div class="score-item">
+           <span>正确率</span>
+           <strong>{{ accuracyRate }}%</strong>
+         </div>
+
          <div class="score-item">
            <span>客观题得分</span>
            <strong>{{ objectiveScore }} 分</strong>
@@ -337,16 +356,12 @@ const submitExam = () => {
          </div>
 
          <div class="score-item">
-           <span>当前总分</span>
-           <strong>{{ totalScore }} 分</strong>
-         </div>
-
-         <div class="score-item">
            <span>选择题正确数</span>
            <strong>{{ correctChoiceCount }} / {{ choiceQuestions.length }}</strong>
          </div>
        </div>
-     </div>
+
+      </div>
 
       <div v-if="currentQuestion" class="answer-question-card">
         <p class="question-index">
