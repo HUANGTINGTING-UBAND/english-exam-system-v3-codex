@@ -168,3 +168,65 @@ h1 {
   font-size: 18px;
   color: #6b7280;
 }
+.exam-list-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+
+.page-header {
+  margin-bottom: 32px;
+}
+
+.exam-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.exam-card {
+  background: white;
+  padding: 28px;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.exam-card h2 {
+  margin-top: 0;
+  font-size: 22px;
+}
+
+.exam-desc {
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.exam-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.exam-meta span {
+  background: #f3f4f6;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.exam-btn {
+  margin-top: 8px;
+}
+
+.empty-text {
+  margin-top: 24px;
+  color: #6b7280;
+}
+
+@media (max-width: 760px) {
+  .exam-grid {
+    grid-template-columns: 1fr;
+  }
+}
