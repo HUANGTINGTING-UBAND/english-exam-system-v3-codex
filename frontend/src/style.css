@@ -678,3 +678,12 @@ h1 {
     flex-direction: column;
   }
 }
+.weak-point-content {
+  flex: 1;
+}
+
+.advice-text {
+  margin-top: 8px;
+  color: #374151;
+  line-height: 1.7;
+}

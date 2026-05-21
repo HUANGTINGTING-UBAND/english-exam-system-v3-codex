@@ -189,8 +189,21 @@ const questionTypeMap = {
   cloze: '完形填空',
 }
 
+const knowledgeAdviceMap = {
+  动词时态: '建议复习一般现在时、一般过去时和现在完成时，整理常见不规则动词变化。',
+  翻译: '建议每天练习 5 句中译英，重点关注语序、时态和固定搭配。',
+  动词过去式: '建议集中复习过去时间标志词，如 yesterday、last week，并背熟常见动词过去式。',
+  写作: '建议积累开头句、过渡句和结尾句，每周完成 2 篇短文训练表达结构。',
+  基础词汇: '建议每天复习 10 个基础高频词，并结合图片或例句记忆。',
+  'be 动词': '建议复习 am、is、are 与不同主语的搭配，并通过造句巩固。',
+}
+
 const getQuestionTypeName = (type) => {
   return questionTypeMap[type] || '未知题型'
+}
+
+const getKnowledgeAdvice = (pointName) => {
+  return knowledgeAdviceMap[pointName] || '建议回看本知识点相关错题，整理错误原因，并进行专项练习。'
 }
 
 const startExam = () => {
@@ -410,6 +423,9 @@ const submitExam = () => {
                <p>
                  得分 {{ point.earnedScore }} / {{ point.totalScore }}，
                  失分 {{ point.lostScore }} 分
+               </p>
+               <p class="advice-text">
+                 建议：{{ getKnowledgeAdvice(point.name) }}
                </p>
              </div>
 
