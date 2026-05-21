@@ -430,3 +430,26 @@ h1 {
     padding: 28px 22px;
   }
 }
+.question-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+  .question-actions {
+    flex-direction: column;
+  }
+
+  .question-actions .primary-btn,
+  .question-actions .secondary-btn {
+    width: 100%;
+  }
+}

@@ -48,6 +48,18 @@ const startExam = () => {
 const goBackToPreview = () => {
   isStarted.value = false
 }
+
+const goToPreviousQuestion = () => {
+  if (currentQuestionIndex.value > 0) {
+    currentQuestionIndex.value -= 1
+  }
+}
+
+const goToNextQuestion = () => {
+  if (currentQuestionIndex.value < currentQuestions.value.length - 1) {
+    currentQuestionIndex.value += 1
+  }
+}
 </script>
 
 <template>
@@ -158,6 +170,24 @@ const goBackToPreview = () => {
           class="subjective-answer"
           placeholder="请在这里输入你的答案"
         ></textarea>
+        
+        <div class="question-actions">
+          <button
+            class="secondary-btn"
+            :disabled="currentQuestionIndex === 0"
+            @click="goToPreviousQuestion"
+          >
+            上一题
+          </button>
+
+          <button
+            class="primary-btn"
+            :disabled="currentQuestionIndex === currentQuestions.length - 1"
+            @click="goToNextQuestion"
+          >
+            下一题
+          </button>
+        </div>
       </div>
 
       <p v-else class="empty-text">
