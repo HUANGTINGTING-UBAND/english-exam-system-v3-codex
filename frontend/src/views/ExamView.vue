@@ -1,10 +1,13 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
 const route = useRoute()
+
+const isStarted = ref(false)
+const currentQuestionIndex = ref(0)
 
 const examId = computed(() => route.params.examId)
 
@@ -14,6 +17,10 @@ const currentExam = computed(() => {
 
 const currentQuestions = computed(() => {
   return mockQuestions.filter((question) => question.examId === examId.value)
+})
+
+const currentQuestion = computed(() => {
+  return currentQuestions.value[currentQuestionIndex.value]
 })
 
 const formatTimeLimit = (seconds) => {
@@ -32,11 +39,20 @@ const questionTypeMap = {
 const getQuestionTypeName = (type) => {
   return questionTypeMap[type] || '未知题型'
 }
+
+const startExam = () => {
+  isStarted.value = true
+  currentQuestionIndex.value = 0
+}
+
+const goBackToPreview = () => {
+  isStarted.value = false
+}
 </script>
 
 <template>
   <div class="exam-page">
-    <div v-if="currentExam" class="exam-start-card">
+    <div v-if="currentExam && !isStarted" class="exam-start-card">
       <p class="tag">Exam Preview</p>
       <h1>{{ currentExam.title }}</h1>
       <p class="exam-desc">{{ currentExam.description }}</p>
@@ -92,14 +108,70 @@ const getQuestionTypeName = (type) => {
         </p>
       </section>
 
-      <button class="primary-btn start-exam-btn">开始考试</button>
-      <RouterLink class="back-link" to="/exams">返回试卷列表</RouterLink>
+      <button class="primary-btn start-exam-btn" @click="startExam">
+        开始考试
+      </button>
+
+      <RouterLink class="back-link" to="/exams">
+        返回试卷列表
+      </RouterLink>
+    </div>
+
+    <div v-else-if="currentExam && isStarted" class="exam-answer-card">
+      <div class="answer-header">
+        <div>
+          <p class="tag">Answering</p>
+          <h1>{{ currentExam.title }}</h1>
+        </div>
+
+        <button class="secondary-btn" @click="goBackToPreview">
+          返回说明页
+        </button>
+      </div>
+
+      <div v-if="currentQuestion" class="answer-question-card">
+        <p class="question-index">
+          第 {{ currentQuestionIndex + 1 }} 题 / 共 {{ currentQuestions.length }} 题
+        </p>
+
+        <h2>{{ currentQuestion.text }}</h2>
+
+        <div class="question-meta">
+          <span>题型：{{ getQuestionTypeName(currentQuestion.type) }}</span>
+          <span>知识点：{{ currentQuestion.knowledgePoint }}</span>
+          <span>分值：{{ currentQuestion.score }} 分</span>
+        </div>
+
+        <div v-if="currentQuestion.type === 'choice'" class="choice-options">
+          <label
+            v-for="(option, index) in currentQuestion.options"
+            :key="option"
+            class="choice-option"
+          >
+            <input type="radio" name="choice-answer" />
+            <span>{{ String.fromCharCode(65 + index) }}. {{ option }}</span>
+          </label>
+        </div>
+
+        <textarea
+          v-else
+          class="subjective-answer"
+          placeholder="请在这里输入你的答案"
+        ></textarea>
+      </div>
+
+      <p v-else class="empty-text">
+        当前试卷暂无可作答题目。
+      </p>
     </div>
 
     <div v-else class="page-placeholder">
       <h1>试卷不存在</h1>
       <p>没有找到 ID 为 {{ examId }} 的试卷，请返回试卷列表重新选择。</p>
-      <RouterLink class="primary-btn" to="/exams">返回试卷列表</RouterLink>
+
+      <RouterLink class="primary-btn" to="/exams">
+        返回试卷列表
+      </RouterLink>
     </div>
   </div>
 </template>
