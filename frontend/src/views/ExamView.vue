@@ -39,6 +39,11 @@ const isCurrentQuestionAnswered = computed(() => {
   return answer !== undefined && answer !== ''
 })
 
+const isQuestionAnswered = (questionId) => {
+  const answer = userAnswers.value[questionId]
+  return answer !== undefined && answer !== ''
+}
+
 const formatTimeLimit = (seconds) => {
   return Math.round(seconds / 60)
 }
@@ -82,6 +87,11 @@ const goToNextQuestion = () => {
     currentQuestionIndex.value += 1
   }
 }
+
+const goToQuestion = (index) => {
+  currentQuestionIndex.value = index
+}
+
 </script>
 
 <template>
@@ -150,7 +160,6 @@ const goToNextQuestion = () => {
         返回试卷列表
       </RouterLink>
     </div>
-
     <div v-else-if="currentExam && isStarted" class="exam-answer-card">
       <div class="answer-header">
        <div>
@@ -164,6 +173,21 @@ const goToNextQuestion = () => {
        <button class="secondary-btn" @click="goBackToPreview">
          返回说明页
        </button>
+      </div>  
+ 
+      <div class="question-nav">
+       <button
+         v-for="(question, index) in currentQuestions"
+         :key="question.id"
+         class="question-nav-item"
+         :class="{
+         active: index === currentQuestionIndex,
+         answered: isQuestionAnswered(question.id),
+         }"
+         @click="goToQuestion(index)"
+        >
+         {{ index + 1 }}
+        </button>
       </div>
 
       <div v-if="currentQuestion" class="answer-question-card">
