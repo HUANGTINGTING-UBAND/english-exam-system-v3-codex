@@ -9,8 +9,8 @@
         </p>
 
         <div class="actions">
-          <button class="primary-btn">开始练习</button>
-          <button class="secondary-btn">查看我的记录</button>
+          <RouterLink class="primary-btn" to="/exams">开始练习</RouterLink>
+          <RouterLink class="secondary-btn" to="/profile">查看我的记录</RouterLink>
         </div>
       </div>
     </header>
@@ -20,22 +20,30 @@
 
       <div class="grade-grid">
         <div class="grade-card">
-          <h3>小学</h3>
+          <RouterLink class="grade-title-link" to="/exams?grade=primary">
+            小学
+          </RouterLink>
           <p>适合小学英语基础练习。</p>
         </div>
 
         <div class="grade-card">
-          <h3>初中</h3>
+          <RouterLink class="grade-title-link" to="/exams?grade=junior">
+            初中
+          </RouterLink>
           <p>适合中考英语模拟训练。</p>
         </div>
 
         <div class="grade-card">
-          <h3>高中</h3>
+          <RouterLink class="grade-title-link" to="/exams?grade=senior">
+            高中
+          </RouterLink>
           <p>适合高考英语综合训练。</p>
         </div>
 
         <div class="grade-card">
-          <h3>大学</h3>
+          <RouterLink class="grade-title-link" to="/exams?grade=college">
+            大学
+          </RouterLink>
           <p>适合大学英语与四六级基础训练。</p>
         </div>
       </div>
