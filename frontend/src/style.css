@@ -532,3 +532,23 @@ h1 {
   color: #166534;
   line-height: 1.7;
 }
+.submitted-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+}
+
+.choice-option input:disabled {
+  cursor: not-allowed;
+}
+
+.subjective-answer:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}

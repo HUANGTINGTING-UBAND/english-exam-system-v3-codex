@@ -74,10 +74,18 @@ const goBackToPreview = () => {
   isStarted.value = false
 }
 const saveChoiceAnswer = (questionId, optionIndex) => {
+  if (isSubmitted.value) {
+    return
+  }
+
   userAnswers.value[questionId] = optionIndex
 }
 
 const saveTextAnswer = (questionId, answerText) => {
+  if (isSubmitted.value) {
+    return
+  }
+
   userAnswers.value[questionId] = answerText
 }
 const goToPreviousQuestion = () => {
@@ -199,9 +207,17 @@ const submitExam = () => {
            返回说明页
          </button>
 
-         <button class="primary-btn" @click="submitExam">
+         <button
+           v-if="!isSubmitted"
+           class="primary-btn"
+           @click="submitExam"
+          >
            提交试卷
-         </button>
+          </button>
+
+          <span v-else class="submitted-badge">
+           已提交
+          </span>
        </div>
       </div>  
  
@@ -224,7 +240,7 @@ const submitExam = () => {
         <h2>试卷已提交</h2>
         <p>当前阶段已完成提交状态记录，后续将继续加入自动评分和结果分析。</p>
       </div>
-      
+
       <div v-if="currentQuestion" class="answer-question-card">
         <p class="question-index">
           第 {{ currentQuestionIndex + 1 }} 题 / 共 {{ currentQuestions.length }} 题
@@ -255,6 +271,7 @@ const submitExam = () => {
              type="radio"
              :name="currentQuestion.id"
              :checked="userAnswers[currentQuestion.id] === index"
+             :disabled="isSubmitted"
              @change="saveChoiceAnswer(currentQuestion.id, index)"
             />
             <span>{{ String.fromCharCode(65 + index) }}. {{ option }}</span>
@@ -266,6 +283,7 @@ const submitExam = () => {
          class="subjective-answer"
          placeholder="请在这里输入你的答案"
          :value="userAnswers[currentQuestion.id] || ''"
+         :disabled="isSubmitted"
          @input="saveTextAnswer(currentQuestion.id, $event.target.value)"
         ></textarea>
         
