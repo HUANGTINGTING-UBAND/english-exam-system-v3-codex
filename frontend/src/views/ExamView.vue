@@ -1,18 +1,30 @@
 <script setup>
-import { computed, ref, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
 const route = useRoute()
+
 const isStarted = ref(false)
+const isPaused = ref(false)
+const isSubmitted = ref(false)
+
 const currentQuestionIndex = ref(0)
 const userAnswers = ref({})
 const subjectiveScores = ref({})
-const isSubmitted = ref(false)
+
 const remainingTime = ref(0)
 const timerId = ref(null)
 const submitType = ref('')
+
+const pauseCount = ref(0)
+const pauseStartedAt = ref(null)
+const totalPausedDuration = ref(0)
+
+const startedAt = ref(null)
+const submittedAt = ref(null)
+
 const examId = computed(() => route.params.examId)
 
 const currentExam = computed(() => {
@@ -33,13 +45,23 @@ const answeredCount = computed(() => {
     return answer !== undefined && answer !== ''
   }).length
 })
+
 const unansweredCount = computed(() => {
   return currentQuestions.value.length - answeredCount.value
+})
+
+const isCurrentQuestionAnswered = computed(() => {
+  if (!currentQuestion.value) {
+    return false
+  }
+
+  return isQuestionAnswered(currentQuestion.value.id)
 })
 
 const choiceQuestions = computed(() => {
   return currentQuestions.value.filter((question) => question.type === 'choice')
 })
+
 const subjectiveQuestions = computed(() => {
   return currentQuestions.value.filter((question) => question.type !== 'choice')
 })
@@ -82,6 +104,26 @@ const accuracyRate = computed(() => {
   return Math.round((totalScore.value / currentExam.value.totalScore) * 100)
 })
 
+const elapsedSeconds = computed(() => {
+  if (!currentExam.value) {
+    return 0
+  }
+
+  return currentExam.value.timeLimit - remainingTime.value
+})
+
+const submitTypeText = computed(() => {
+  if (submitType.value === 'auto') {
+    return '自动提交'
+  }
+
+  if (submitType.value === 'manual') {
+    return '主动提交'
+  }
+
+  return '未提交'
+})
+
 const weakKnowledgePoints = computed(() => {
   const pointMap = {}
 
@@ -104,9 +146,8 @@ const weakKnowledgePoints = computed(() => {
   return Object.values(pointMap)
     .map((point) => {
       const lostScore = point.totalScore - point.earnedScore
-      const lossRate = point.totalScore === 0
-        ? 0
-        : Math.round((lostScore / point.totalScore) * 100)
+      const lossRate =
+        point.totalScore === 0 ? 0 : Math.round((lostScore / point.totalScore) * 100)
 
       return {
         ...point,
@@ -117,81 +158,6 @@ const weakKnowledgePoints = computed(() => {
     .sort((a, b) => b.lossRate - a.lossRate)
     .slice(0, 3)
 })
-
-const getChoiceAnswerText = (question, answerIndex) => {
-  if (answerIndex === undefined || answerIndex === '') {
-    return '未作答'
-  }
-
-  const optionText = question.options?.[answerIndex]
-
-  if (!optionText) {
-    return '未作答'
-  }
-
-  return `${String.fromCharCode(65 + answerIndex)}. ${optionText}`
-}
-
-const isChoiceCorrect = (question) => {
-  return userAnswers.value[question.id] === question.answer
-}
-
-const getQuestionScore = (question) => {
-  if (question.type === 'choice') {
-    return isChoiceCorrect(question) ? question.score : 0
-  }
-
-  return Number(subjectiveScores.value[question.id] || 0)
-}
-
-const saveSubjectiveScore = (question, scoreValue) => {
-  const score = Number(scoreValue)
-
-  if (Number.isNaN(score)) {
-    subjectiveScores.value[question.id] = 0
-    return
-  }
-
-  if (score < 0) {
-    subjectiveScores.value[question.id] = 0
-    return
-  }
-
-  if (score > question.score) {
-    subjectiveScores.value[question.id] = question.score
-    return
-  }
-
-  subjectiveScores.value[question.id] = score
-}
-
-const isCurrentQuestionAnswered = computed(() => {
-  if (!currentQuestion.value) {
-    return false
-  }
-
-  const answer = userAnswers.value[currentQuestion.value.id]
-  return answer !== undefined && answer !== ''
-})
-
-const isQuestionAnswered = (questionId) => {
-  const answer = userAnswers.value[questionId]
-  return answer !== undefined && answer !== ''
-}
-
-const formatTimeLimit = (seconds) => {
-  return Math.round(seconds / 60)
-}
-
-const formatCountdown = (seconds) => {
-  const minutes = Math.floor(seconds / 60)
-  const restSeconds = seconds % 60
-
-  const paddedMinutes = String(minutes).padStart(2, '0')
-  const paddedSeconds = String(restSeconds).padStart(2, '0')
-
-  return `${paddedMinutes}:${paddedSeconds}`
-}
 
 const questionTypeMap = {
   choice: '单选题',
@@ -219,13 +185,124 @@ const getKnowledgeAdvice = (pointName) => {
   return knowledgeAdviceMap[pointName] || '建议回看本知识点相关错题，整理错误原因，并进行专项练习。'
 }
 
-const startExam = () => {
-  isStarted.value = true
-  isSubmitted.value = false
-  submitType.value = ''
-  currentQuestionIndex.value = 0
-  remainingTime.value = currentExam.value?.timeLimit || 0
-  startTimer()
+const formatTimeLimit = (seconds) => {
+  return Math.round(seconds / 60)
+}
+
+const formatCountdown = (seconds) => {
+  const safeSeconds = Math.max(seconds, 0)
+  const minutes = Math.floor(safeSeconds / 60)
+  const restSeconds = safeSeconds % 60
+
+  const paddedMinutes = String(minutes).padStart(2, '0')
+  const paddedSeconds = String(restSeconds).padStart(2, '0')
+
+  return `${paddedMinutes}:${paddedSeconds}`
+}
+
+const getChoiceAnswerText = (question, answerIndex) => {
+  if (answerIndex === undefined || answerIndex === '') {
+    return '未作答'
+  }
+
+  const optionText = question.options?.[answerIndex]
+
+  if (!optionText) {
+    return '未作答'
+  }
+
+  return `${String.fromCharCode(65 + answerIndex)}. ${optionText}`
+}
+
+const isChoiceCorrect = (question) => {
+  return userAnswers.value[question.id] === question.answer
+}
+
+const getQuestionScore = (question) => {
+  if (question.type === 'choice') {
+    return isChoiceCorrect(question) ? question.score : 0
+  }
+
+  return Number(subjectiveScores.value[question.id] || 0)
+}
+
+const isQuestionAnswered = (questionId) => {
+  const answer = userAnswers.value[questionId]
+  return answer !== undefined && answer !== ''
+}
+
+const getQuestionNavClass = (question, index) => {
+  return {
+    active: index === currentQuestionIndex.value,
+    answered: isQuestionAnswered(question.id),
+    correct: isSubmitted.value && question.type === 'choice' && isChoiceCorrect(question),
+    wrong: isSubmitted.value && question.type === 'choice' && !isChoiceCorrect(question),
+  }
+}
+
+const getProgressStorageKey = () => {
+  return `exam-progress-${examId.value}`
+}
+
+const saveProgress = () => {
+  if (!currentExam.value || !isStarted.value || isSubmitted.value) {
+    return
+  }
+
+  const progress = {
+    examId: examId.value,
+    isStarted: isStarted.value,
+    isPaused: isPaused.value,
+    currentQuestionIndex: currentQuestionIndex.value,
+    userAnswers: userAnswers.value,
+    subjectiveScores: subjectiveScores.value,
+    remainingTime: remainingTime.value,
+    pauseCount: pauseCount.value,
+    totalPausedDuration: totalPausedDuration.value,
+    startedAt: startedAt.value,
+  }
+
+  localStorage.setItem(getProgressStorageKey(), JSON.stringify(progress))
+}
+
+const clearProgress = () => {
+  localStorage.removeItem(getProgressStorageKey())
+}
+
+const loadProgress = () => {
+  const rawProgress = localStorage.getItem(getProgressStorageKey())
+
+  if (!rawProgress) {
+    return
+  }
+
+  const confirmed = window.confirm('检测到你有一场未完成的考试，是否继续？')
+
+  if (!confirmed) {
+    clearProgress()
+    return
+  }
+
+  try {
+    const progress = JSON.parse(rawProgress)
+
+    isStarted.value = true
+    isPaused.value = progress.isPaused || false
+    isSubmitted.value = false
+    currentQuestionIndex.value = progress.currentQuestionIndex || 0
+    userAnswers.value = progress.userAnswers || {}
+    subjectiveScores.value = progress.subjectiveScores || {}
+    remainingTime.value = progress.remainingTime || currentExam.value?.timeLimit || 0
+    pauseCount.value = progress.pauseCount || 0
+    totalPausedDuration.value = progress.totalPausedDuration || 0
+    startedAt.value = progress.startedAt || Date.now()
+
+    if (!isPaused.value) {
+      startTimer()
+    }
+  } catch (error) {
+    clearProgress()
+  }
 }
 
 const stopTimer = () => {
@@ -235,28 +312,91 @@ const stopTimer = () => {
   }
 }
 
+const autoSubmitExam = () => {
+  if (isSubmitted.value) {
+    return
+  }
+
+  finalizeSubmit('auto')
+}
+
 const startTimer = () => {
   stopTimer()
 
   timerId.value = setInterval(() => {
-    if (remainingTime.value > 0) {
-      remainingTime.value -= 1
-    return
+    if (isPaused.value || isSubmitted.value) {
+      return
     }
 
-    autoSubmitExam()
+    if (remainingTime.value > 0) {
+      remainingTime.value -= 1
+    }
+
+    if (remainingTime.value <= 0) {
+      autoSubmitExam()
+    }
   }, 1000)
+}
+
+const startExam = () => {
+  isStarted.value = true
+  isPaused.value = false
+  isSubmitted.value = false
+  submitType.value = ''
+  currentQuestionIndex.value = 0
+  userAnswers.value = {}
+  subjectiveScores.value = {}
+  pauseCount.value = 0
+  totalPausedDuration.value = 0
+  startedAt.value = Date.now()
+  submittedAt.value = null
+  remainingTime.value = currentExam.value?.timeLimit || 0
+
+  startTimer()
+  saveProgress()
+}
+
+const pauseExam = () => {
+  if (isSubmitted.value || isPaused.value) {
+    return
+  }
+
+  isPaused.value = true
+  pauseCount.value += 1
+  pauseStartedAt.value = Date.now()
+  stopTimer()
+  saveProgress()
+}
+
+const resumeExam = () => {
+  if (!isPaused.value) {
+    return
+  }
+
+  if (pauseStartedAt.value) {
+    totalPausedDuration.value += Math.floor((Date.now() - pauseStartedAt.value) / 1000)
+  }
+
+  isPaused.value = false
+  pauseStartedAt.value = null
+  startTimer()
+  saveProgress()
 }
 
 const goBackToPreview = () => {
   isStarted.value = false
+  isPaused.value = false
+  stopTimer()
+  saveProgress()
 }
+
 const saveChoiceAnswer = (questionId, optionIndex) => {
   if (isSubmitted.value) {
     return
   }
 
   userAnswers.value[questionId] = optionIndex
+  saveProgress()
 }
 
 const saveTextAnswer = (questionId, answerText) => {
@@ -265,31 +405,56 @@ const saveTextAnswer = (questionId, answerText) => {
   }
 
   userAnswers.value[questionId] = answerText
+  saveProgress()
 }
+
+const saveSubjectiveScore = (question, scoreValue) => {
+  const score = Number(scoreValue)
+
+  if (Number.isNaN(score)) {
+    subjectiveScores.value[question.id] = 0
+    return
+  }
+
+  if (score < 0) {
+    subjectiveScores.value[question.id] = 0
+    return
+  }
+
+  if (score > question.score) {
+    subjectiveScores.value[question.id] = question.score
+    return
+  }
+
+  subjectiveScores.value[question.id] = score
+}
+
 const goToPreviousQuestion = () => {
   if (currentQuestionIndex.value > 0) {
     currentQuestionIndex.value -= 1
+    saveProgress()
   }
 }
 
 const goToNextQuestion = () => {
   if (currentQuestionIndex.value < currentQuestions.value.length - 1) {
     currentQuestionIndex.value += 1
+    saveProgress()
   }
 }
 
 const goToQuestion = (index) => {
   currentQuestionIndex.value = index
+  saveProgress()
 }
 
-const autoSubmitExam = () => {
-  if (isSubmitted.value) {
-    return
-  }
-
+const finalizeSubmit = (type) => {
   isSubmitted.value = true
-  submitType.value = 'auto'
+  isPaused.value = false
+  submitType.value = type
+  submittedAt.value = Date.now()
   stopTimer()
+  clearProgress()
 }
 
 const submitExam = () => {
@@ -309,9 +474,7 @@ const submitExam = () => {
     }
   }
 
-  isSubmitted.value = true
-  submitType.value = 'manual'
-  stopTimer()
+  finalizeSubmit('manual')
 }
 
 const restartExam = () => {
@@ -325,16 +488,111 @@ const restartExam = () => {
   subjectiveScores.value = {}
   currentQuestionIndex.value = 0
   isSubmitted.value = false
+  isPaused.value = false
   submitType.value = ''
-  isStarted.value = true
+  pauseCount.value = 0
+  totalPausedDuration.value = 0
+  pauseStartedAt.value = null
+  startedAt.value = Date.now()
+  submittedAt.value = null
   remainingTime.value = currentExam.value?.timeLimit || 0
+
   startTimer()
+  saveProgress()
 }
+
+const getWrongQuestionsForCurrentAttempt = () => {
+  return currentQuestions.value.filter((question) => {
+    if (question.type === 'choice') {
+      return !isChoiceCorrect(question)
+    }
+
+    const score = Number(subjectiveScores.value[question.id] || 0)
+    return score < question.score / 2
+  })
+}
+
+const saveWrongQuestionsToLocal = () => {
+  const wrongQuestions = getWrongQuestionsForCurrentAttempt()
+
+  if (wrongQuestions.length === 0) {
+    window.alert('本次暂无错题。')
+    return
+  }
+
+  const oldWrongQuestions = JSON.parse(localStorage.getItem('wrongQuestions') || '[]')
+
+  const newWrongQuestions = wrongQuestions.map((question) => ({
+    id: `${examId.value}-${question.id}-${Date.now()}`,
+    examId: examId.value,
+    examTitle: currentExam.value.title,
+    questionId: question.id,
+    questionText: question.text,
+    type: question.type,
+    knowledgePoint: question.knowledgePoint,
+    score: question.score,
+    earnedScore: getQuestionScore(question),
+    savedAt: new Date().toISOString(),
+  }))
+
+  localStorage.setItem(
+    'wrongQuestions',
+    JSON.stringify([...newWrongQuestions, ...oldWrongQuestions])
+  )
+
+  window.alert(`已保存 ${newWrongQuestions.length} 道错题到本地错题本。`)
+}
+
+const saveExamHistoryToLocal = () => {
+  if (!currentExam.value) {
+    return
+  }
+
+  const oldHistory = JSON.parse(localStorage.getItem('examHistory') || '[]')
+
+  const historyItem = {
+    id: `${examId.value}-${Date.now()}`,
+    examId: examId.value,
+    examTitle: currentExam.value.title,
+    totalScore: currentExam.value.totalScore,
+    earnedScore: totalScore.value,
+    accuracyRate: accuracyRate.value,
+    objectiveScore: objectiveScore.value,
+    subjectiveScore: subjectiveScore.value,
+    submitType: submitTypeText.value,
+    usedTime: elapsedSeconds.value,
+    pauseCount: pauseCount.value,
+    totalPausedDuration: totalPausedDuration.value,
+    createdAt: new Date().toISOString(),
+  }
+
+  localStorage.setItem('examHistory', JSON.stringify([historyItem, ...oldHistory]))
+  window.alert('本次考试结果已保存到本地历史记录。')
+}
+
+watch(
+  [
+    userAnswers,
+    subjectiveScores,
+    currentQuestionIndex,
+    remainingTime,
+    isPaused,
+    pauseCount,
+    totalPausedDuration,
+  ],
+  () => {
+    saveProgress()
+  },
+  { deep: true }
+)
+
+onMounted(() => {
+  loadProgress()
+})
 
 onBeforeUnmount(() => {
   stopTimer()
 })
-
 </script>
 
 <template>
@@ -365,8 +623,8 @@ onBeforeUnmount(() => {
         <h2>考试说明</h2>
         <ul>
           <li>点击“开始考试”后，系统将进入正式答题页面。</li>
-          <li>后续版本会加入倒计时、自动保存、提交评分和薄弱项分析。</li>
-          <li>当前阶段先展示试卷题目预览，用于验证题目数据读取。</li>
+          <li>考试过程中可暂停，暂停时不允许继续答题。</li>
+          <li>系统会暂存在本地保存答题进度，刷新后可选择继续考试。</li>
         </ul>
       </div>
 
@@ -406,264 +664,303 @@ onBeforeUnmount(() => {
 
     <div v-else-if="currentExam && isStarted" class="exam-answer-card">
       <div class="answer-header">
-       <div>
-         <p class="tag">Answering</p>
-         <h1>{{ currentExam.title }}</h1>
-         <p class="answer-progress">
-         已答 {{ answeredCount }} / 共 {{ currentQuestions.length }} 题
-         </p>
-       </div>
-      
-       <div class="timer-box">
+        <div>
+          <p class="tag">Answering</p>
+          <h1>{{ currentExam.title }}</h1>
+          <p class="answer-progress">
+            已答 {{ answeredCount }} / 共 {{ currentQuestions.length }} 题
+          </p>
+          <p class="answer-progress">
+            提交方式：{{ submitTypeText }}｜暂停 {{ pauseCount }} 次｜累计暂停
+            {{ formatCountdown(totalPausedDuration) }}
+          </p>
+          <p v-if="isSubmitted" class="answer-progress">
+            用时：{{ formatCountdown(elapsedSeconds) }}
+          </p>
+        </div>
+
+        <div class="timer-box">
           剩余时间：{{ formatCountdown(remainingTime) }}
-       </div>
+        </div>
 
-       <div class="answer-header-actions">
-         <button class="secondary-btn" @click="goBackToPreview">
-           返回说明页
-         </button>
-
-         <button
-           v-if="!isSubmitted"
-           class="primary-btn"
-           @click="submitExam"
+        <div class="answer-header-actions">
+          <button
+            v-if="!isSubmitted && !isPaused"
+            class="secondary-btn"
+            @click="pauseExam"
           >
-           提交试卷
+            暂停考试
+          </button>
+
+          <button
+            v-if="!isSubmitted && isPaused"
+            class="primary-btn"
+            @click="resumeExam"
+          >
+            继续考试
+          </button>
+
+          <button class="secondary-btn" @click="goBackToPreview">
+            返回说明页
+          </button>
+
+          <button
+            v-if="!isSubmitted"
+            class="primary-btn"
+            @click="submitExam"
+          >
+            提交试卷
           </button>
 
           <span v-else class="submitted-badge">
-           已提交
-          </span>
-       </div>
-      </div>  
- 
-      <div class="question-nav">
-       <button
-         v-for="(question, index) in currentQuestions"
-         :key="question.id"
-         class="question-nav-item"
-         :class="{
-         active: index === currentQuestionIndex,
-         answered: isQuestionAnswered(question.id),
-         }"
-         @click="goToQuestion(index)"
-        >
-         {{ index + 1 }}
-        </button>
-      </div>
-      
-      <div v-if="isSubmitted" class="submit-result-box">
-       <div class="result-header">
-         <div>
-           <p class="tag">Result</p>
-             <h2>考试结果</h2>
-          </div>
-
-          <span class="submitted-badge">
             已提交
           </span>
         </div>
-        <p v-if="submitType === 'auto'" class="result-desc">
-         考试时间已结束，系统已自动提交。系统已根据选择题自动评分，并结合主观题自评分生成当前成绩。
-        </p>
-        <p class="result-desc">
-         本次考试已完成提交，系统已根据选择题自动评分，并结合主观题自评分生成当前成绩。
-       </p>
+      </div>
 
-       <div class="score-summary">
-         <div class="score-item score-main">
-           <span>最终得分</span>
-           <strong>{{ totalScore }} / {{ currentExam.totalScore }}</strong>
-         </div>
+      <div v-if="isPaused" class="pause-overlay">
+        <h2>考试已暂停</h2>
+        <p>暂停期间不会继续倒计时，也不能继续答题。</p>
+        <button class="primary-btn" @click="resumeExam">
+          继续考试
+        </button>
+      </div>
 
-         <div class="score-item">
-           <span>正确率</span>
-           <strong>{{ accuracyRate }}%</strong>
-         </div>
-
-         <div class="score-item">
-           <span>客观题得分</span>
-           <strong>{{ objectiveScore }} 分</strong>
-         </div>
-
-         <div class="score-item">
-           <span>主观题自评分</span>
-           <strong>{{ subjectiveScore }} 分</strong>
-         </div>
-
-         <div class="score-item">
-           <span>选择题正确数</span>
-           <strong>{{ correctChoiceCount }} / {{ choiceQuestions.length }}</strong>
-         </div>
-       </div>
-       
-       <div class="weak-points-section">
-         <h3>薄弱项分析</h3>
-
-         <div v-if="weakKnowledgePoints.length > 0" class="weak-point-list">
-           <div
-             v-for="point in weakKnowledgePoints"
-             :key="point.name"
-             class="weak-point-item"
-            >
-             <div>
-               <strong>{{ point.name }}</strong>
-               <p>
-                 得分 {{ point.earnedScore }} / {{ point.totalScore }}，
-                 失分 {{ point.lostScore }} 分
-               </p>
-               <p class="advice-text">
-                 建议：{{ getKnowledgeAdvice(point.name) }}
-               </p>
-             </div>
-
-             <span class="loss-rate">
-               失分率 {{ point.lossRate }}%
-             </span>
-         </div>
-       
+      <template v-else>
+        <div class="question-nav">
+          <button
+            v-for="(question, index) in currentQuestions"
+            :key="question.id"
+            class="question-nav-item"
+            :class="getQuestionNavClass(question, index)"
+            @click="goToQuestion(index)"
+          >
+            {{ index + 1 }}
+          </button>
         </div>
-         <p v-else class="empty-text">
-           暂无薄弱项数据。
+
+        <div v-if="isSubmitted" class="submit-result-box">
+          <div class="result-header">
+            <div>
+              <p class="tag">Result</p>
+              <h2>考试结果</h2>
+            </div>
+
+            <span class="submitted-badge">
+              已提交
+            </span>
+          </div>
+
+          <p v-if="submitType === 'auto'" class="result-desc">
+            考试时间已结束，系统已自动提交。系统已根据选择题自动评分，并结合主观题自评分生成当前成绩。
           </p>
-       </div>
 
-       <div class="result-actions">
-         <button class="primary-btn" @click="restartExam">
-           重新考试
-         </button>
+          <p v-else class="result-desc">
+            本次考试已完成提交，系统已根据选择题自动评分，并结合主观题自评分生成当前成绩。
+          </p>
 
-         <RouterLink class="secondary-btn" to="/exams">
-           返回试卷列表
-         </RouterLink>
-      </div>
+          <div class="score-summary">
+            <div class="score-item score-main">
+              <span>最终得分</span>
+              <strong>{{ totalScore }} / {{ currentExam.totalScore }}</strong>
+            </div>
 
-      </div>
+            <div class="score-item">
+              <span>正确率</span>
+              <strong>{{ accuracyRate }}%</strong>
+            </div>
 
-      <div v-if="currentQuestion" class="answer-question-card">
-        <p class="question-index">
-          第 {{ currentQuestionIndex + 1 }} 题 / 共 {{ currentQuestions.length }} 题
-        </p>
+            <div class="score-item">
+              <span>客观题得分</span>
+              <strong>{{ objectiveScore }} 分</strong>
+            </div>
 
-        <p
-         class="answer-status"
-         :class="{ answered: isCurrentQuestionAnswered }"
-        >
-         {{ isCurrentQuestionAnswered ? '当前题：已答' : '当前题：未答' }}
-        </p>
+            <div class="score-item">
+              <span>主观题自评分</span>
+              <strong>{{ subjectiveScore }} 分</strong>
+            </div>
 
-        <h2>{{ currentQuestion.text }}</h2>
+            <div class="score-item">
+              <span>选择题正确数</span>
+              <strong>{{ correctChoiceCount }} / {{ choiceQuestions.length }}</strong>
+            </div>
+          </div>
 
-        <div class="question-meta">
-          <span>题型：{{ getQuestionTypeName(currentQuestion.type) }}</span>
-          <span>知识点：{{ currentQuestion.knowledgePoint }}</span>
-          <span>分值：{{ currentQuestion.score }} 分</span>
+          <div class="weak-points-section">
+            <h3>薄弱项分析</h3>
+
+            <div v-if="weakKnowledgePoints.length > 0" class="weak-point-list">
+              <div
+                v-for="point in weakKnowledgePoints"
+                :key="point.name"
+                class="weak-point-item"
+              >
+                <div class="weak-point-content">
+                  <strong>{{ point.name }}</strong>
+                  <p>
+                    得分 {{ point.earnedScore }} / {{ point.totalScore }}，
+                    失分 {{ point.lostScore }} 分
+                  </p>
+                  <p class="advice-text">
+                    建议：{{ getKnowledgeAdvice(point.name) }}
+                  </p>
+                </div>
+
+                <span class="loss-rate">
+                  失分率 {{ point.lossRate }}%
+                </span>
+              </div>
+            </div>
+
+            <p v-else class="empty-text">
+              暂无薄弱项数据。
+            </p>
+          </div>
+
+          <div class="result-actions">
+            <button class="primary-btn" @click="restartExam">
+              重新考试
+            </button>
+
+            <button class="secondary-btn" @click="saveExamHistoryToLocal">
+              保存结果
+            </button>
+
+            <button class="secondary-btn" @click="saveWrongQuestionsToLocal">
+              保存错题
+            </button>
+
+            <RouterLink class="secondary-btn" to="/exams">
+              返回试卷列表
+            </RouterLink>
+          </div>
         </div>
 
-        <div v-if="currentQuestion.type === 'choice'" class="choice-options">
-          <label
-            v-for="(option, index) in currentQuestion.options"
-            :key="option"
-            class="choice-option"
+        <div v-if="currentQuestion" class="answer-question-card">
+          <p class="question-index">
+            第 {{ currentQuestionIndex + 1 }} 题 / 共 {{ currentQuestions.length }} 题
+          </p>
+
+          <p
+            class="answer-status"
+            :class="{ answered: isCurrentQuestionAnswered }"
           >
-            <input
-             type="radio"
-             :name="currentQuestion.id"
-             :checked="userAnswers[currentQuestion.id] === index"
-             :disabled="isSubmitted"
-             @change="saveChoiceAnswer(currentQuestion.id, index)"
-            />
-            <span>{{ String.fromCharCode(65 + index) }}. {{ option }}</span>
-          </label>
-        </div>
+            {{ isCurrentQuestionAnswered ? '当前题：已答' : '当前题：未答' }}
+          </p>
 
-        <textarea
-         v-else
-         class="subjective-answer"
-         placeholder="请在这里输入你的答案"
-         :value="userAnswers[currentQuestion.id] || ''"
-         :disabled="isSubmitted"
-         @input="saveTextAnswer(currentQuestion.id, $event.target.value)"
-        ></textarea>
-        
-        <div v-if="isSubmitted" class="question-result-box">
-          <template v-if="currentQuestion.type === 'choice'">
-           <p>
-             <strong>你的答案：</strong>
-             {{ getChoiceAnswerText(currentQuestion, userAnswers[currentQuestion.id]) }}
-           </p>
+          <h2>{{ currentQuestion.text }}</h2>
 
-           <p>
-             <strong>正确答案：</strong>
-             {{ getChoiceAnswerText(currentQuestion, currentQuestion.answer) }}
-           </p>
+          <div class="question-meta">
+            <span>题型：{{ getQuestionTypeName(currentQuestion.type) }}</span>
+            <span>知识点：{{ currentQuestion.knowledgePoint }}</span>
+            <span>分值：{{ currentQuestion.score }} 分</span>
+          </div>
 
-           <p>
-             <strong>结果：</strong>
-             <span :class="isChoiceCorrect(currentQuestion) ? 'result-correct' : 'result-wrong'">
-               {{ isChoiceCorrect(currentQuestion) ? '正确' : '错误' }}
-             </span>
-           </p>
+          <div v-if="currentQuestion.type === 'choice'" class="choice-options">
+            <label
+              v-for="(option, index) in currentQuestion.options"
+              :key="option"
+              class="choice-option"
+            >
+              <input
+                type="radio"
+                :name="currentQuestion.id"
+                :checked="userAnswers[currentQuestion.id] === index"
+                :disabled="isSubmitted"
+                @change="saveChoiceAnswer(currentQuestion.id, index)"
+              />
+              <span>{{ String.fromCharCode(65 + index) }}. {{ option }}</span>
+            </label>
+          </div>
 
-           <p>
-             <strong>得分：</strong>
-             {{ getQuestionScore(currentQuestion) }} / {{ currentQuestion.score }}
-           </p>
-         </template>
+          <textarea
+            v-else
+            class="subjective-answer"
+            placeholder="请在这里输入你的答案"
+            :value="userAnswers[currentQuestion.id] || ''"
+            :disabled="isSubmitted"
+            @input="saveTextAnswer(currentQuestion.id, $event.target.value)"
+          ></textarea>
 
-         <template v-else>
-           <p>
-             <strong>你的答案：</strong>
-             {{ userAnswers[currentQuestion.id] || '未作答' }}
-           </p>
+          <div v-if="isSubmitted" class="question-result-box">
+            <template v-if="currentQuestion.type === 'choice'">
+              <p>
+                <strong>你的答案：</strong>
+                {{ getChoiceAnswerText(currentQuestion, userAnswers[currentQuestion.id]) }}
+              </p>
 
-           <p>
-             <strong>参考答案：</strong>
-             {{ currentQuestion.referenceAnswer || '暂无参考答案' }}
-           </p>
+              <p>
+                <strong>正确答案：</strong>
+                {{ getChoiceAnswerText(currentQuestion, currentQuestion.answer) }}
+              </p>
 
-           <div class="subjective-score-control">
-             <label>
-               本题自评分：
-               <input
-                 type="number"
-                 min="0"
-                 :max="currentQuestion.score"
-                 :value="subjectiveScores[currentQuestion.id] || 0"
-                 @input="saveSubjectiveScore(currentQuestion, $event.target.value)"
-               />
-               / {{ currentQuestion.score }} 分
-             </label>
-           </div>
-         </template>
+              <p>
+                <strong>结果：</strong>
+                <span :class="isChoiceCorrect(currentQuestion) ? 'result-correct' : 'result-wrong'">
+                  {{ isChoiceCorrect(currentQuestion) ? '正确' : '错误' }}
+                </span>
+              </p>
 
-           <p v-if="currentQuestion.explanation">
+              <p>
+                <strong>得分：</strong>
+                {{ getQuestionScore(currentQuestion) }} / {{ currentQuestion.score }}
+              </p>
+            </template>
+
+            <template v-else>
+              <p>
+                <strong>你的答案：</strong>
+                {{ userAnswers[currentQuestion.id] || '未作答' }}
+              </p>
+
+              <p>
+                <strong>参考答案：</strong>
+                {{ currentQuestion.referenceAnswer || '暂无参考答案' }}
+              </p>
+
+              <div class="subjective-score-control">
+                <label>
+                  本题自评分：
+                  <input
+                    type="number"
+                    min="0"
+                    :max="currentQuestion.score"
+                    :value="subjectiveScores[currentQuestion.id] || 0"
+                    @input="saveSubjectiveScore(currentQuestion, $event.target.value)"
+                  />
+                  / {{ currentQuestion.score }} 分
+                </label>
+              </div>
+            </template>
+
+            <p v-if="currentQuestion.explanation">
               <strong>解析：</strong>{{ currentQuestion.explanation }}
-           </p>
+            </p>
+          </div>
+
+          <div class="question-actions">
+            <button
+              class="secondary-btn"
+              :disabled="currentQuestionIndex === 0"
+              @click="goToPreviousQuestion"
+            >
+              上一题
+            </button>
+
+            <button
+              class="primary-btn"
+              :disabled="currentQuestionIndex === currentQuestions.length - 1"
+              @click="goToNextQuestion"
+            >
+              下一题
+            </button>
+          </div>
         </div>
 
-        <div class="question-actions">
-          <button
-            class="secondary-btn"
-            :disabled="currentQuestionIndex === 0"
-            @click="goToPreviousQuestion"
-          >
-            上一题
-          </button>
-
-          <button
-            class="primary-btn"
-            :disabled="currentQuestionIndex === currentQuestions.length - 1"
-            @click="goToNextQuestion"
-          >
-            下一题
-          </button>
-        </div>
-      </div>
-
-      <p v-else class="empty-text">
-        当前试卷暂无可作答题目。
-      </p>
+        <p v-else class="empty-text">
+          当前试卷暂无可作答题目。
+        </p>
+      </template>
     </div>
 
     <div v-else class="page-placeholder">

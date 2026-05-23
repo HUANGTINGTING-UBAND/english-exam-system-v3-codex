@@ -6,6 +6,7 @@ import RegisterView from '../views/RegisterView.vue'
 import ExamListView from '../views/ExamListView.vue'
 import ExamView from '../views/ExamView.vue'
 import ProfileView from '../views/ProfileView.vue'
+import AdminView from '../views/AdminView.vue'
 
 const routes = [
   {
@@ -37,6 +38,11 @@ const routes = [
     path: '/profile',
     name: 'profile',
     component: ProfileView,
+  },
+  {
+    path: '/admin',
+    name: 'admin',
+    component: AdminView,
   },
 ]
 
