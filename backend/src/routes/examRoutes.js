@@ -150,6 +150,66 @@ router.get('/exams/:examId/questions', async (req, res) => {
   }
 })
 
+router.get('/attempts/history', async (req, res) => {
+  try {
+    const guestUser = await prisma.user.findUnique({
+      where: {
+        username: 'guest_student',
+      },
+    })
+
+    if (!guestUser) {
+      return res.json({
+        message: 'History loaded successfully',
+        data: [],
+      })
+    }
+
+    const attempts = await prisma.examAttempt.findMany({
+      where: {
+        userId: guestUser.id,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        exam: true,
+        userAnswers: true,
+      },
+    })
+
+    const formattedAttempts = attempts.map((attempt) => ({
+      id: attempt.id,
+      examId: attempt.examId,
+      examTitle: attempt.exam.title,
+      totalScore: attempt.exam.totalScore,
+      earnedScore: attempt.totalScore,
+      accuracyRate: attempt.accuracyRate,
+      objectiveScore: attempt.objectiveScore,
+      subjectiveScore: attempt.subjectiveScore,
+      submitType: attempt.submitType,
+      usedTime: attempt.usedTime,
+      pauseCount: attempt.pauseCount,
+      totalPausedDuration: attempt.totalPausedDuration,
+      answerCount: attempt.userAnswers.length,
+      createdAt: attempt.createdAt,
+      submittedAt: attempt.submittedAt,
+    }))
+
+    res.json({
+      message: 'History loaded successfully',
+      data: formattedAttempts,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: 'Failed to load attempt history',
+      error: error.message,
+    })
+  }
+})
+
 module.exports = router
 
 router.post('/attempts/submit', async (req, res) => {

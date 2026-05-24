@@ -49,3 +49,13 @@ export const submitExamAttempt = async (attemptData) => {
   const result = await response.json()
   return result.data
 }
+export const getAttemptHistory = async () => {
+  const response = await fetch(`${API_BASE_URL}/attempts/history`)
+
+  if (!response.ok) {
+    throw new Error('获取考试历史失败')
+  }
+
+  const result = await response.json()
+  return result.data
+}
