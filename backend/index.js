@@ -2,12 +2,13 @@ const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
 const examRoutes = require('./src/routes/examRoutes')
-
+const authRoutes = require('./src/routes/authRoutes')
 const app = express()
 
 app.use(cors())
 app.use(express.json())
 app.use('/api', examRoutes)
+app.use('/api', authRoutes)
 
 const PORT = process.env.PORT || 3000
 
