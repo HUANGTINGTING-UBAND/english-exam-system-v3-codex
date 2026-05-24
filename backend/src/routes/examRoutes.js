@@ -1,3 +1,4 @@
+const { optionalAuth } = require('../middlewares/authMiddleware')
 const express = require('express')
 const prisma = require('../lib/prisma')
 
@@ -150,24 +151,26 @@ router.get('/exams/:examId/questions', async (req, res) => {
   }
 })
 
-router.get('/attempts/history', async (req, res) => {
+router.get('/attempts/history', optionalAuth, async (req, res) => {
   try {
-    const guestUser = await prisma.user.findUnique({
-      where: {
-        username: 'guest_student',
-      },
-    })
-
-    if (!guestUser) {
+    let targetUser = req.user
+    if (!targetUser) {
+        targetUser = await prisma.user.findUnique({
+            where: {
+                 username: 'guest_student',
+            },
+       })
+    }
+    if (!targetUser) {
       return res.json({
-        message: 'History loaded successfully',
-        data: [],
-      })
+         message: 'History loaded successfully',
+         data: [],
+       })
     }
 
     const attempts = await prisma.examAttempt.findMany({
       where: {
-        userId: guestUser.id,
+        userId: targetUser.id,
       },
       orderBy: {
         createdAt: 'desc',
@@ -210,7 +213,7 @@ router.get('/attempts/history', async (req, res) => {
   }
 })
 
-router.post('/wrong-questions', async (req, res) => {
+router.post('/wrong-questions', optionalAuth, async (req, res) => {
   try {
     const {
       userId,
@@ -231,7 +234,7 @@ router.post('/wrong-questions', async (req, res) => {
       })
     }
 
-    let finalUserId = userId
+    let finalUserId = req.user?.id || userId
 
     if (!finalUserId) {
       const guestUser = await prisma.user.upsert({
@@ -284,24 +287,27 @@ router.post('/wrong-questions', async (req, res) => {
   }
 })
 
-router.get('/wrong-questions', async (req, res) => {
+router.get('/wrong-questions', optionalAuth, async (req, res) => {
   try {
-    const guestUser = await prisma.user.findUnique({
-      where: {
-        username: 'guest_student',
-      },
+    let targetUser = req.user
+  if (!targetUser) {
+    targetUser = await prisma.user.findUnique({
+    where: {
+      username: 'guest_student',
+    },
     })
+  }
 
-    if (!guestUser) {
-      return res.json({
-        message: 'Wrong questions loaded successfully',
-        data: [],
-      })
-    }
+  if (!targetUser) {
+     return res.json({
+      message: 'Wrong questions loaded successfully',
+      data: [],
+     })
+   }
 
-    const wrongQuestions = await prisma.wrongQuestion.findMany({
+   const wrongQuestions = await prisma.wrongQuestion.findMany({
       where: {
-        userId: guestUser.id,
+       userId: targetUser.id,
       },
       orderBy: {
         createdAt: 'desc',
@@ -344,7 +350,7 @@ router.get('/wrong-questions', async (req, res) => {
 
 module.exports = router
 
-router.post('/attempts/submit', async (req, res) => {
+router.post('/attempts/submit', optionalAuth, async (req, res) => {
   try {
     const {
       userId,
@@ -374,10 +380,10 @@ router.post('/attempts/submit', async (req, res) => {
       })
     }
 
-    let finalUserId = userId
+    let finalUserId = req.user?.id || userId
 
     if (!finalUserId) {
-      const guestUser = await prisma.user.upsert({
+     const guestUser = await prisma.user.upsert({
         where: {
           username: 'guest_student',
         },
@@ -389,9 +395,9 @@ router.post('/attempts/submit', async (req, res) => {
           role: 'STUDENT',
           gradeLevel: 'JUNIOR',
         },
-      })
+     })
 
-      finalUserId = guestUser.id
+     finalUserId = guestUser.id
     }
 
     const attempt = await prisma.examAttempt.create({

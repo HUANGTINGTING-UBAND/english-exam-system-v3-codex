@@ -1,4 +1,15 @@
 const API_BASE_URL = '/api'
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token')
+
+  if (!token) {
+    return {}
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  }
+}
 
 export const getExams = async (grade) => {
   const query = grade ? `?grade=${grade}` : ''
@@ -38,6 +49,7 @@ export const submitExamAttempt = async (attemptData) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify(attemptData),
   })
@@ -50,7 +62,11 @@ export const submitExamAttempt = async (attemptData) => {
   return result.data
 }
 export const getAttemptHistory = async () => {
-  const response = await fetch(`${API_BASE_URL}/attempts/history`)
+  const response = await fetch(`${API_BASE_URL}/attempts/history`, {
+   headers: {
+    ...getAuthHeaders(),
+   },
+  })
 
   if (!response.ok) {
     throw new Error('获取考试历史失败')
@@ -63,7 +79,8 @@ export const saveWrongQuestions = async (wrongQuestionData) => {
   const response = await fetch(`${API_BASE_URL}/wrong-questions`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+     'Content-Type': 'application/json',
+     ...getAuthHeaders(),
     },
     body: JSON.stringify(wrongQuestionData),
   })
@@ -77,8 +94,11 @@ export const saveWrongQuestions = async (wrongQuestionData) => {
 }
 
 export const getWrongQuestions = async () => {
-  const response = await fetch(`${API_BASE_URL}/wrong-questions`)
-
+  const response = await fetch(`${API_BASE_URL}/wrong-questions`, {
+   headers: {
+    ...getAuthHeaders(),
+   },
+   })
   if (!response.ok) {
     throw new Error('获取错题本失败')
   }
