@@ -33,3 +33,19 @@ export const getQuestionsByExamId = async (examId) => {
   const result = await response.json()
   return result.data
 }
+export const submitExamAttempt = async (attemptData) => {
+  const response = await fetch(`${API_BASE_URL}/attempts/submit`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(attemptData),
+  })
+
+  if (!response.ok) {
+    throw new Error('提交考试结果失败')
+  }
+
+  const result = await response.json()
+  return result.data
+}

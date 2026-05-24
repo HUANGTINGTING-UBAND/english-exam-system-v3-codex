@@ -151,3 +151,102 @@ router.get('/exams/:examId/questions', async (req, res) => {
 })
 
 module.exports = router
+
+router.post('/attempts/submit', async (req, res) => {
+  try {
+    const {
+      userId,
+      examId,
+      objectiveScore,
+      subjectiveScore,
+      totalScore,
+      accuracyRate,
+      submitType,
+      usedTime,
+      pauseCount,
+      totalPausedDuration,
+      startedAt,
+      submittedAt,
+      answers,
+    } = req.body
+
+    if (!examId) {
+      return res.status(400).json({
+        message: 'examId is required',
+      })
+    }
+
+    if (!Array.isArray(answers)) {
+      return res.status(400).json({
+        message: 'answers must be an array',
+      })
+    }
+
+    let finalUserId = userId
+
+    if (!finalUserId) {
+      const guestUser = await prisma.user.upsert({
+        where: {
+          username: 'guest_student',
+        },
+        update: {},
+        create: {
+          username: 'guest_student',
+          passwordHash: 'temporary_guest_password_hash',
+          nickname: '游客学生',
+          role: 'STUDENT',
+          gradeLevel: 'JUNIOR',
+        },
+      })
+
+      finalUserId = guestUser.id
+    }
+
+    const attempt = await prisma.examAttempt.create({
+      data: {
+        userId: finalUserId,
+        examId,
+        objectiveScore: Number(objectiveScore || 0),
+        subjectiveScore: Number(subjectiveScore || 0),
+        totalScore: Number(totalScore || 0),
+        accuracyRate: Number(accuracyRate || 0),
+        submitType: submitType === 'auto' ? 'AUTO' : 'MANUAL',
+        usedTime: Number(usedTime || 0),
+        pauseCount: Number(pauseCount || 0),
+        totalPausedDuration: Number(totalPausedDuration || 0),
+        startedAt: startedAt ? new Date(startedAt) : null,
+        submittedAt: submittedAt ? new Date(submittedAt) : new Date(),
+        userAnswers: {
+          create: answers.map((answer) => ({
+            questionId: answer.questionId,
+            answerText: answer.answerText ?? null,
+            selectedIndex:
+              answer.selectedIndex === undefined || answer.selectedIndex === null
+                ? null
+                : Number(answer.selectedIndex),
+            score: Number(answer.score || 0),
+            isCorrect:
+              answer.isCorrect === undefined || answer.isCorrect === null
+                ? null
+                : Boolean(answer.isCorrect),
+          })),
+        },
+      },
+      include: {
+        userAnswers: true,
+      },
+    })
+
+    res.status(201).json({
+      message: 'Attempt submitted successfully',
+      data: attempt,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: 'Failed to submit attempt',
+      error: error.message,
+    })
+  }
+})

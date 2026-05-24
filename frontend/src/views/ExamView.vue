@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { getExamById, getQuestionsByExamId } from '../api/examApi'
+import { getExamById, getQuestionsByExamId, submitExamAttempt} from '../api/examApi'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
@@ -366,12 +366,12 @@ const stopTimer = () => {
   }
 }
 
-const autoSubmitExam = () => {
+const autoSubmitExam = async () => {
   if (isSubmitted.value) {
     return
   }
 
-  finalizeSubmit('auto')
+  await finalizeSubmit('auto')
 }
 
 const startTimer = () => {
@@ -502,16 +502,64 @@ const goToQuestion = (index) => {
   saveProgress()
 }
 
-const finalizeSubmit = (type) => {
+const buildAttemptPayload = (type) => {
+  return {
+    examId: examId.value,
+    objectiveScore: objectiveScore.value,
+    subjectiveScore: subjectiveScore.value,
+    totalScore: totalScore.value,
+    accuracyRate: accuracyRate.value,
+    submitType: type,
+    usedTime: elapsedSeconds.value,
+    pauseCount: pauseCount.value,
+    totalPausedDuration: totalPausedDuration.value,
+    startedAt: startedAt.value ? new Date(startedAt.value).toISOString() : null,
+    submittedAt: new Date().toISOString(),
+    answers: currentQuestions.value.map((question) => {
+      const userAnswer = userAnswers.value[question.id]
+
+      if (question.type === 'choice') {
+        return {
+          questionId: question.id,
+          selectedIndex:
+            userAnswer === undefined || userAnswer === ''
+              ? null
+              : Number(userAnswer),
+          answerText: null,
+          score: getQuestionScore(question),
+          isCorrect: isChoiceCorrect(question),
+        }
+      }
+
+      return {
+        questionId: question.id,
+        selectedIndex: null,
+        answerText: userAnswer || '',
+        score: getQuestionScore(question),
+        isCorrect: null,
+      }
+    }),
+  }
+}
+
+const finalizeSubmit = async (type) => {
   isSubmitted.value = true
   isPaused.value = false
   submitType.value = type
   submittedAt.value = Date.now()
   stopTimer()
   clearProgress()
+
+  try {
+    await submitExamAttempt(buildAttemptPayload(type))
+    window.alert('考试结果已保存到数据库。')
+  } catch (error) {
+    console.error(error)
+    window.alert('考试已在前端提交，但保存到数据库失败。请检查后端服务。')
+  }
 }
 
-const submitExam = () => {
+const submitExam = async () => {
   if (unansweredCount.value > 0) {
     const confirmed = window.confirm(
       `你还有 ${unansweredCount.value} 道题未作答，确认提交吗？`
@@ -528,7 +576,7 @@ const submitExam = () => {
     }
   }
 
-  finalizeSubmit('manual')
+  await finalizeSubmit('manual')
 }
 
 const restartExam = () => {
