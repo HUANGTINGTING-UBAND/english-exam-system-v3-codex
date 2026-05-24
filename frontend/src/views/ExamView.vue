@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
+import { getExamById, getQuestionsByExamId } from '../api/examApi'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
@@ -9,6 +10,11 @@ const route = useRoute()
 const isStarted = ref(false)
 const isPaused = ref(false)
 const isSubmitted = ref(false)
+
+const examData = ref(null)
+const questionsData = ref([])
+const isLoadingExam = ref(false)
+const examErrorMessage = ref('')
 
 const currentQuestionIndex = ref(0)
 const userAnswers = ref({})
@@ -28,10 +34,16 @@ const submittedAt = ref(null)
 const examId = computed(() => route.params.examId)
 
 const currentExam = computed(() => {
+  if (examData.value) {
+    return examData.value
+  }
   return mockExams.find((exam) => exam.id === examId.value)
 })
 
 const currentQuestions = computed(() => {
+  if (questionsData.value.length > 0) {
+    return questionsData.value
+  }
   return mockQuestions.filter((question) => question.examId === examId.value)
 })
 
@@ -215,7 +227,7 @@ const getChoiceAnswerText = (question, answerIndex) => {
 }
 
 const isChoiceCorrect = (question) => {
-  return userAnswers.value[question.id] === question.answer
+  return Number(userAnswers.value[question.id]) === Number(question.answer)
 }
 
 const getQuestionScore = (question) => {
@@ -302,6 +314,48 @@ const loadProgress = () => {
     }
   } catch (error) {
     clearProgress()
+  }
+}
+
+const normalizeQuestionFromApi = (question) => {
+  const typeMap = {
+    CHOICE: 'choice',
+    TRANSLATION: 'translation',
+    ERROR_CORRECTION: 'error_correction',
+    WRITING: 'writing',
+    READING: 'reading',
+    CLOZE: 'cloze',
+  }
+
+  return {
+    ...question,
+    type: typeMap[question.type] || question.type,
+  }
+}
+
+const loadExamFromApi = async () => {
+  isLoadingExam.value = true
+  examErrorMessage.value = ''
+
+  try {
+    const [examResult, questionsResult] = await Promise.all([
+      getExamById(examId.value),
+      getQuestionsByExamId(examId.value),
+    ])
+
+    examData.value = {
+      ...examResult,
+      gradeLevel: String(examResult.gradeLevel).toLowerCase(),
+    }
+
+    questionsData.value = questionsResult.map(normalizeQuestionFromApi)
+  } catch (error) {
+    console.error(error)
+    examErrorMessage.value = '后端考试数据暂时不可用，当前显示本地 mock 数据。'
+    examData.value = null
+    questionsData.value = []
+  } finally {
+    isLoadingExam.value = false
   }
 }
 
@@ -586,7 +640,8 @@ watch(
   { deep: true }
 )
 
-onMounted(() => {
+onMounted(async () => {
+  await loadExamFromApi()
   loadProgress()
 })
 
@@ -597,6 +652,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="exam-page">
+    <div v-if="examErrorMessage" class="api-warning">
+     {{ examErrorMessage }}
+    </div>
+    <div v-if="isLoadingExam" class="loading-box">
+     正在加载考试数据……
+    </div>
     <div v-if="currentExam && !isStarted" class="exam-start-card">
       <p class="tag">Exam Preview</p>
       <h1>{{ currentExam.title }}</h1>

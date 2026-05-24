@@ -888,3 +888,63 @@ h1 {
     align-items: flex-start;
   }
 }
+.api-warning {
+  max-width: 1080px;
+  margin: 0 auto 20px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  line-height: 1.7;
+}
+
+.loading-box,
+.empty-card {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px;
+  border-radius: 18px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  color: #4b5563;
+}
+
+.exam-card-grid {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.exam-card {
+  background: white;
+  padding: 28px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.exam-card h2 {
+  margin-top: 0;
+}
+
+.exam-card p {
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.exam-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 18px 0 22px;
+  color: #4b5563;
+}
+
+@media (max-width: 760px) {
+  .exam-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
