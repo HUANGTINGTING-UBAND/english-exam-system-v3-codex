@@ -210,6 +210,138 @@ router.get('/attempts/history', async (req, res) => {
   }
 })
 
+router.post('/wrong-questions', async (req, res) => {
+  try {
+    const {
+      userId,
+      examId,
+      attemptId,
+      questions,
+    } = req.body
+
+    if (!examId) {
+      return res.status(400).json({
+        message: 'examId is required',
+      })
+    }
+
+    if (!Array.isArray(questions)) {
+      return res.status(400).json({
+        message: 'questions must be an array',
+      })
+    }
+
+    let finalUserId = userId
+
+    if (!finalUserId) {
+      const guestUser = await prisma.user.upsert({
+        where: {
+          username: 'guest_student',
+        },
+        update: {},
+        create: {
+          username: 'guest_student',
+          passwordHash: 'temporary_guest_password_hash',
+          nickname: '游客学生',
+          role: 'STUDENT',
+          gradeLevel: 'JUNIOR',
+        },
+      })
+
+      finalUserId = guestUser.id
+    }
+
+    const createdWrongQuestions = []
+
+    for (const question of questions) {
+      const createdItem = await prisma.wrongQuestion.create({
+        data: {
+          userId: finalUserId,
+          examId,
+          questionId: question.questionId,
+          attemptId: attemptId || null,
+          questionType: String(question.questionType).toUpperCase(),
+          knowledgePoint: question.knowledgePoint || '未分类',
+          reason: question.reason || '用户保存',
+          note: question.note || null,
+        },
+      })
+
+      createdWrongQuestions.push(createdItem)
+    }
+
+    res.status(201).json({
+      message: 'Wrong questions saved successfully',
+      data: createdWrongQuestions,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: 'Failed to save wrong questions',
+      error: error.message,
+    })
+  }
+})
+
+router.get('/wrong-questions', async (req, res) => {
+  try {
+    const guestUser = await prisma.user.findUnique({
+      where: {
+        username: 'guest_student',
+      },
+    })
+
+    if (!guestUser) {
+      return res.json({
+        message: 'Wrong questions loaded successfully',
+        data: [],
+      })
+    }
+
+    const wrongQuestions = await prisma.wrongQuestion.findMany({
+      where: {
+        userId: guestUser.id,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        exam: true,
+        question: true,
+      },
+    })
+
+    const formattedWrongQuestions = wrongQuestions.map((item) => ({
+      id: item.id,
+      examId: item.examId,
+      examTitle: item.exam.title,
+      questionId: item.questionId,
+      questionText: item.question.text,
+      questionType: item.questionType,
+      knowledgePoint: item.knowledgePoint,
+      reason: item.reason,
+      note: item.note,
+      score: item.question.score,
+      referenceAnswer: item.question.referenceAnswer,
+      explanation: item.question.explanation,
+      createdAt: item.createdAt,
+    }))
+
+    res.json({
+      message: 'Wrong questions loaded successfully',
+      data: formattedWrongQuestions,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: 'Failed to load wrong questions',
+      error: error.message,
+    })
+  }
+})
+
 module.exports = router
 
 router.post('/attempts/submit', async (req, res) => {

@@ -1,7 +1,12 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { getExamById, getQuestionsByExamId, submitExamAttempt} from '../api/examApi'
+import {
+  getExamById,
+  getQuestionsByExamId,
+  submitExamAttempt,
+  saveWrongQuestions,
+} from '../api/examApi'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
@@ -614,7 +619,7 @@ const getWrongQuestionsForCurrentAttempt = () => {
   })
 }
 
-const saveWrongQuestionsToLocal = () => {
+const saveWrongQuestionsToLocal = async () => {
   const wrongQuestions = getWrongQuestionsForCurrentAttempt()
 
   if (wrongQuestions.length === 0) {
@@ -622,9 +627,7 @@ const saveWrongQuestionsToLocal = () => {
     return
   }
 
-  const oldWrongQuestions = JSON.parse(localStorage.getItem('wrongQuestions') || '[]')
-
-  const newWrongQuestions = wrongQuestions.map((question) => ({
+  const localWrongQuestions = wrongQuestions.map((question) => ({
     id: `${examId.value}-${question.id}-${Date.now()}`,
     examId: examId.value,
     examTitle: currentExam.value.title,
@@ -637,12 +640,30 @@ const saveWrongQuestionsToLocal = () => {
     savedAt: new Date().toISOString(),
   }))
 
+  const oldWrongQuestions = JSON.parse(localStorage.getItem('wrongQuestions') || '[]')
+
   localStorage.setItem(
     'wrongQuestions',
-    JSON.stringify([...newWrongQuestions, ...oldWrongQuestions])
+    JSON.stringify([...localWrongQuestions, ...oldWrongQuestions])
   )
 
-  window.alert(`已保存 ${newWrongQuestions.length} 道错题到本地错题本。`)
+  try {
+    await saveWrongQuestions({
+      examId: examId.value,
+      questions: wrongQuestions.map((question) => ({
+        questionId: question.id,
+        questionType: question.type,
+        knowledgePoint: question.knowledgePoint,
+        reason: '本次练习中保存',
+        note: '',
+      })),
+    })
+
+    window.alert(`已保存 ${wrongQuestions.length} 道错题到数据库。`)
+  } catch (error) {
+    console.error(error)
+    window.alert(`已保存 ${wrongQuestions.length} 道错题到本地，但保存到数据库失败。`)
+  }
 }
 
 const saveExamHistoryToLocal = () => {

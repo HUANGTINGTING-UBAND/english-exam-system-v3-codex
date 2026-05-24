@@ -59,3 +59,30 @@ export const getAttemptHistory = async () => {
   const result = await response.json()
   return result.data
 }
+export const saveWrongQuestions = async (wrongQuestionData) => {
+  const response = await fetch(`${API_BASE_URL}/wrong-questions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(wrongQuestionData),
+  })
+
+  if (!response.ok) {
+    throw new Error('保存错题失败')
+  }
+
+  const result = await response.json()
+  return result.data
+}
+
+export const getWrongQuestions = async () => {
+  const response = await fetch(`${API_BASE_URL}/wrong-questions`)
+
+  if (!response.ok) {
+    throw new Error('获取错题本失败')
+  }
+
+  const result = await response.json()
+  return result.data
+}
