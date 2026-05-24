@@ -1,9 +1,24 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import { getAttemptHistory, getWrongQuestions } from '../api/examApi'
+import { getSavedUser, logoutUser } from '../api/authApi'
 
 const examHistory = ref([])
 const wrongQuestions = ref([])
+const currentUser = ref(getSavedUser())
+
+const handleLogout = () => {
+  const confirmed = window.confirm('确认退出登录吗？')
+
+  if (!confirmed) {
+    return
+  }
+
+  logoutUser()
+  currentUser.value = null
+  window.alert('已退出登录')
+}
 
 const isLoadingHistory = ref(false)
 const historyErrorMessage = ref('')
@@ -123,12 +138,31 @@ onMounted(() => {
 <template>
   <div class="profile-page">
     <div class="page-header">
-      <p class="tag">Profile</p>
-      <h1>个人中心</h1>
-      <p class="desc">
-        这里展示数据库中的考试历史记录，以及数据库 / 本地错题本记录。
-      </p>
+     <p class="tag">Profile</p>
+       <h1>个人中心</h1>
+     <p class="desc">
+      这里展示数据库中的考试历史记录，以及数据库 / 本地错题本记录。
+     </p>
+
+     <div v-if="currentUser" class="user-info-box">
+       <p>
+         当前登录：{{ currentUser.nickname || currentUser.username }}
+       </p>
+       <p>
+         角色：{{ currentUser.role }} ｜ 学段：{{ currentUser.gradeLevel || '未设置' }}
+       </p>
+         <button class="secondary-btn" @click="handleLogout">
+         退出登录
+       </button>
+      </div>
+
+    <div v-else class="user-info-box">
+      <p>当前未登录。你仍可以使用游客模式查看部分记录。</p>
+         <RouterLink class="primary-btn" to="/login">
+          去登录
+         </RouterLink>
     </div>
+  </div>
 
     <section class="profile-section">
       <div class="section-title-row">
