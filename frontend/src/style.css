@@ -977,3 +977,61 @@ h1 {
   opacity: 0.6;
   cursor: not-allowed;
 }
+.home-auth-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 36px;
+}
+
+.home-user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid #dbeafe;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.home-auth-link,
+.home-auth-button {
+  border: none;
+  background: white;
+  color: #2563eb;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.home-auth-link:hover,
+.home-auth-button:hover {
+  background: #eff6ff;
+}
+
+.primary-auth-link {
+  background: #2563eb;
+  color: white;
+}
+
+.primary-auth-link:hover {
+  background: #1d4ed8;
+}
+
+@media (max-width: 560px) {
+  .home-auth-bar {
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+
+  .home-user-info {
+    justify-content: center;
+    border-radius: 18px;
+  }
+}
