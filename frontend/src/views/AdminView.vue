@@ -10,6 +10,7 @@ import {
   importQuestionsToExam,
   parseQuestionFile,
   updateAdminExamPublishStatus,
+  updateAdminQuestion,
 } from '../api/examApi'
 
 const currentUser = ref(getSavedUser())
@@ -36,6 +37,9 @@ const selectedQuestionExamTitle = ref('')
 const adminQuestions = ref([])
 const isLoadingQuestions = ref(false)
 
+const editingQuestionId = ref('')
+const isUpdatingQuestion = ref(false)
+
 const form = ref({
   title: '',
   gradeLevel: 'JUNIOR',
@@ -43,6 +47,18 @@ const form = ref({
   timeLimit: 3600,
   totalScore: 100,
   isPublished: true,
+})
+
+const editQuestionForm = ref({
+  type: 'CHOICE',
+  text: '',
+  optionsText: '',
+  answer: '',
+  score: 2,
+  knowledgePoint: '',
+  referenceAnswer: '',
+  explanation: '',
+  orderIndex: 1,
 })
 
 const gradeNameMap = {
@@ -120,6 +136,46 @@ const formatAnswer = (question) => {
   }
 
   return String(question.answer)
+}
+
+const normalizeChoiceAnswer = (answer) => {
+  const text = String(answer || '').trim().toUpperCase()
+
+  const map = {
+    A: 0,
+    B: 1,
+    C: 2,
+    D: 3,
+  }
+
+  if (map[text] !== undefined) {
+    return map[text]
+  }
+
+  const numberValue = Number(text)
+
+  if (!Number.isNaN(numberValue)) {
+    return numberValue
+  }
+
+  return answer
+}
+
+const optionsArrayToText = (options) => {
+  if (!Array.isArray(options)) {
+    return ''
+  }
+
+  return options.join('\n')
+}
+
+const optionsTextToArray = (optionsText) => {
+  return String(optionsText || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[A-D][\.．、]\s*/i, '').trim())
+    .filter(Boolean)
 }
 
 const loadAdminExams = async () => {
@@ -295,6 +351,7 @@ const copyImportExample = async () => {
 const handleLoadQuestions = async (exam) => {
   selectedQuestionExamId.value = exam.id
   selectedQuestionExamTitle.value = exam.title
+  editingQuestionId.value = ''
   await handleLoadQuestionsByExamId(exam.id)
 }
 
@@ -310,6 +367,91 @@ const handleLoadQuestionsByExamId = async (examId) => {
     errorMessage.value = error.message || '题目列表加载失败'
   } finally {
     isLoadingQuestions.value = false
+  }
+}
+
+const openEditQuestion = (question) => {
+  editingQuestionId.value = question.id
+
+  editQuestionForm.value = {
+    type: question.type || 'CHOICE',
+    text: question.text || '',
+    optionsText: optionsArrayToText(question.options),
+    answer:
+      question.answer === null || question.answer === undefined
+        ? ''
+        : String(question.answer),
+    score: question.score || 0,
+    knowledgePoint: question.knowledgePoint || '',
+    referenceAnswer: question.referenceAnswer || '',
+    explanation: question.explanation || '',
+    orderIndex: question.orderIndex || 1,
+  }
+}
+
+const closeEditQuestion = () => {
+  editingQuestionId.value = ''
+  editQuestionForm.value = {
+    type: 'CHOICE',
+    text: '',
+    optionsText: '',
+    answer: '',
+    score: 2,
+    knowledgePoint: '',
+    referenceAnswer: '',
+    explanation: '',
+    orderIndex: 1,
+  }
+}
+
+const handleUpdateQuestion = async () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  if (!editingQuestionId.value) {
+    errorMessage.value = '请先选择要编辑的题目'
+    return
+  }
+
+  if (!editQuestionForm.value.text.trim()) {
+    errorMessage.value = '题干不能为空'
+    return
+  }
+
+  isUpdatingQuestion.value = true
+
+  try {
+    const finalType = editQuestionForm.value.type
+
+    await updateAdminQuestion(editingQuestionId.value, {
+      type: finalType,
+      text: editQuestionForm.value.text.trim(),
+      options:
+        finalType === 'CHOICE'
+          ? optionsTextToArray(editQuestionForm.value.optionsText)
+          : null,
+      answer:
+        finalType === 'CHOICE'
+          ? normalizeChoiceAnswer(editQuestionForm.value.answer)
+          : editQuestionForm.value.answer,
+      score: Number(editQuestionForm.value.score || 0),
+      knowledgePoint: editQuestionForm.value.knowledgePoint.trim() || '未分类',
+      referenceAnswer: editQuestionForm.value.referenceAnswer.trim(),
+      explanation: editQuestionForm.value.explanation.trim(),
+      orderIndex: Number(editQuestionForm.value.orderIndex || 1),
+    })
+
+    successMessage.value = '题目更新成功'
+    closeEditQuestion()
+
+    if (selectedQuestionExamId.value) {
+      await handleLoadQuestionsByExamId(selectedQuestionExamId.value)
+    }
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '题目更新失败'
+  } finally {
+    isUpdatingQuestion.value = false
   }
 }
 
@@ -654,41 +796,157 @@ onMounted(() => {
               </span>
             </div>
 
-            <h3>{{ question.text }}</h3>
+            <template v-if="editingQuestionId === question.id">
+              <div class="edit-question-form">
+                <h3>编辑题目</h3>
 
-            <ul v-if="question.options && question.options.length > 0">
-              <li
-                v-for="(option, index) in question.options"
-                :key="option"
-              >
-                {{ String.fromCharCode(65 + index) }}. {{ option }}
-              </li>
-            </ul>
+                <label>
+                  题型
+                  <select v-model="editQuestionForm.type">
+                    <option value="CHOICE">单选题</option>
+                    <option value="TRANSLATION">翻译题</option>
+                    <option value="ERROR_CORRECTION">改错题</option>
+                    <option value="WRITING">写作题</option>
+                    <option value="READING">阅读理解</option>
+                    <option value="CLOZE">完形填空</option>
+                  </select>
+                </label>
 
-            <p>
-              <strong>答案：</strong>{{ formatAnswer(question) }}
-            </p>
+                <label>
+                  题干
+                  <textarea
+                    v-model="editQuestionForm.text"
+                    rows="4"
+                    placeholder="请输入题干"
+                  ></textarea>
+                </label>
 
-            <p>
-              <strong>知识点：</strong>{{ question.knowledgePoint || '未分类' }}
-            </p>
+                <label v-if="editQuestionForm.type === 'CHOICE'">
+                  选项，每行一个选项
+                  <textarea
+                    v-model="editQuestionForm.optionsText"
+                    rows="5"
+                    placeholder="go&#10;goes&#10;went&#10;going"
+                  ></textarea>
+                </label>
 
-            <p v-if="question.referenceAnswer">
-              <strong>参考答案：</strong>{{ question.referenceAnswer }}
-            </p>
+                <label>
+                  答案
+                  <input
+                    v-model="editQuestionForm.answer"
+                    type="text"
+                    placeholder="选择题可填 A/B/C/D 或 0/1/2/3"
+                  />
+                </label>
 
-            <p v-if="question.explanation">
-              <strong>解析：</strong>{{ question.explanation }}
-            </p>
+                <label>
+                  分值
+                  <input
+                    v-model="editQuestionForm.score"
+                    type="number"
+                    min="0"
+                  />
+                </label>
 
-            <div class="admin-question-actions">
-              <button
-                class="danger-btn"
-                @click="handleDeleteQuestion(question)"
-              >
-                删除题目
-              </button>
-            </div>
+                <label>
+                  知识点
+                  <input
+                    v-model="editQuestionForm.knowledgePoint"
+                    type="text"
+                    placeholder="例如：一般现在时"
+                  />
+                </label>
+
+                <label>
+                  参考答案
+                  <textarea
+                    v-model="editQuestionForm.referenceAnswer"
+                    rows="3"
+                    placeholder="请输入参考答案"
+                  ></textarea>
+                </label>
+
+                <label>
+                  解析
+                  <textarea
+                    v-model="editQuestionForm.explanation"
+                    rows="3"
+                    placeholder="请输入解析"
+                  ></textarea>
+                </label>
+
+                <label>
+                  题目顺序
+                  <input
+                    v-model="editQuestionForm.orderIndex"
+                    type="number"
+                    min="1"
+                  />
+                </label>
+
+                <div class="edit-question-actions">
+                  <button
+                    class="primary-btn"
+                    :disabled="isUpdatingQuestion"
+                    @click="handleUpdateQuestion"
+                  >
+                    {{ isUpdatingQuestion ? '保存中……' : '保存修改' }}
+                  </button>
+
+                  <button
+                    class="secondary-btn"
+                    @click="closeEditQuestion"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <h3>{{ question.text }}</h3>
+
+              <ul v-if="question.options && question.options.length > 0">
+                <li
+                  v-for="(option, index) in question.options"
+                  :key="option"
+                >
+                  {{ String.fromCharCode(65 + index) }}. {{ option }}
+                </li>
+              </ul>
+
+              <p>
+                <strong>答案：</strong>{{ formatAnswer(question) }}
+              </p>
+
+              <p>
+                <strong>知识点：</strong>{{ question.knowledgePoint || '未分类' }}
+              </p>
+
+              <p v-if="question.referenceAnswer">
+                <strong>参考答案：</strong>{{ question.referenceAnswer }}
+              </p>
+
+              <p v-if="question.explanation">
+                <strong>解析：</strong>{{ question.explanation }}
+              </p>
+
+              <div class="admin-question-actions">
+                <button
+                  class="secondary-btn"
+                  @click="openEditQuestion(question)"
+                >
+                  编辑题目
+                </button>
+
+                <button
+                  class="danger-btn"
+                  @click="handleDeleteQuestion(question)"
+                >
+                  删除题目
+                </button>
+              </div>
+            </template>
           </div>
         </div>
 

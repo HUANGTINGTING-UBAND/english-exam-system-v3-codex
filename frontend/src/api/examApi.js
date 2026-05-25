@@ -157,6 +157,19 @@ export const getAdminExamQuestions = async (examId) => {
   return parseResponse(response, '获取管理员题目列表失败')
 }
 
+export const updateAdminQuestion = async (questionId, questionData) => {
+  const response = await fetch(`${API_BASE_URL}/admin/questions/${questionId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(questionData),
+  })
+
+  return parseResponse(response, '更新题目失败')
+}
+
 export const deleteAdminQuestion = async (questionId) => {
   const response = await fetch(`${API_BASE_URL}/admin/questions/${questionId}`, {
     method: 'DELETE',
