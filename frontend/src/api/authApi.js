@@ -1,5 +1,24 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
+const parseResponse = async (response) => {
+  const contentType = response.headers.get('content-type') || ''
+
+  if (!contentType.includes('application/json')) {
+    const text = await response.text()
+    console.error('Non-JSON response:', text)
+
+    throw new Error('服务器返回的不是 JSON，请检查 API 地址是否正确')
+  }
+
+  const result = await response.json()
+
+  if (!response.ok) {
+    throw new Error(result.message || '请求失败')
+  }
+
+  return result.data
+}
+
 export const registerUser = async (userData) => {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
@@ -9,13 +28,7 @@ export const registerUser = async (userData) => {
     body: JSON.stringify(userData),
   })
 
-  const result = await response.json()
-
-  if (!response.ok) {
-    throw new Error(result.message || '注册失败')
-  }
-
-  return result.data
+  return parseResponse(response)
 }
 
 export const loginUser = async (loginData) => {
@@ -27,13 +40,7 @@ export const loginUser = async (loginData) => {
     body: JSON.stringify(loginData),
   })
 
-  const result = await response.json()
-
-  if (!response.ok) {
-    throw new Error(result.message || '登录失败')
-  }
-
-  return result.data
+  return parseResponse(response)
 }
 
 export const getCurrentUser = async () => {
@@ -49,13 +56,7 @@ export const getCurrentUser = async () => {
     },
   })
 
-  const result = await response.json()
-
-  if (!response.ok) {
-    throw new Error(result.message || '获取当前用户失败')
-  }
-
-  return result.data
+  return parseResponse(response)
 }
 
 export const saveAuthData = ({ token, user }) => {
