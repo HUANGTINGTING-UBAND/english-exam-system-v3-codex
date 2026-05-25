@@ -186,4 +186,218 @@ router.patch('/admin/exams/:examId/publish', requireAdmin, async (req, res) => {
   }
 })
 
+router.get('/admin/exams/:examId/questions', requireAdmin, async (req, res) => {
+  try {
+    const { examId } = req.params
+
+    const exam = await prisma.exam.findUnique({
+      where: {
+        id: examId,
+      },
+    })
+
+    if (!exam) {
+      return res.status(404).json({
+        message: '试卷不存在',
+      })
+    }
+
+    const questions = await prisma.question.findMany({
+      where: {
+        examId,
+      },
+      orderBy: {
+        orderIndex: 'asc',
+      },
+    })
+
+    res.json({
+      message: '管理员题目列表获取成功',
+      data: questions,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: '管理员题目列表获取失败',
+      error: error.message,
+    })
+  }
+})
+
+router.post('/admin/exams/:examId/questions', requireAdmin, async (req, res) => {
+  try {
+    const { examId } = req.params
+
+    const {
+      type,
+      text,
+      options,
+      answer,
+      score,
+      knowledgePoint,
+      referenceAnswer,
+      explanation,
+      orderIndex,
+    } = req.body
+
+    const exam = await prisma.exam.findUnique({
+      where: {
+        id: examId,
+      },
+    })
+
+    if (!exam) {
+      return res.status(404).json({
+        message: '试卷不存在',
+      })
+    }
+
+    if (!type || !text) {
+      return res.status(400).json({
+        message: '题型和题干不能为空',
+      })
+    }
+
+    const questionCount = await prisma.question.count({
+      where: {
+        examId,
+      },
+    })
+
+    const finalType = String(type).toUpperCase()
+
+    const createdQuestion = await prisma.question.create({
+      data: {
+        examId,
+        type: finalType,
+        text,
+        options: Array.isArray(options) && options.length > 0 ? options : null,
+        answer: answer === undefined || answer === '' ? null : answer,
+        score: Number(score || 0),
+        knowledgePoint: knowledgePoint || '未分类',
+        referenceAnswer: referenceAnswer || '',
+        explanation: explanation || '',
+        orderIndex:
+          orderIndex === undefined || orderIndex === ''
+            ? questionCount + 1
+            : Number(orderIndex),
+      },
+    })
+
+    res.status(201).json({
+      message: '题目创建成功',
+      data: createdQuestion,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: '题目创建失败',
+      error: error.message,
+    })
+  }
+})
+
+router.put('/admin/questions/:questionId', requireAdmin, async (req, res) => {
+  try {
+    const { questionId } = req.params
+
+    const existingQuestion = await prisma.question.findUnique({
+      where: {
+        id: questionId,
+      },
+    })
+
+    if (!existingQuestion) {
+      return res.status(404).json({
+        message: '题目不存在',
+      })
+    }
+
+    const {
+      type,
+      text,
+      options,
+      answer,
+      score,
+      knowledgePoint,
+      referenceAnswer,
+      explanation,
+      orderIndex,
+    } = req.body
+
+    const updatedQuestion = await prisma.question.update({
+      where: {
+        id: questionId,
+      },
+      data: {
+        type: type ? String(type).toUpperCase() : existingQuestion.type,
+        text: text ?? existingQuestion.text,
+        options:
+          options === undefined
+            ? existingQuestion.options
+            : Array.isArray(options) && options.length > 0
+              ? options
+              : null,
+        answer: answer === undefined ? existingQuestion.answer : answer,
+        score: score === undefined ? existingQuestion.score : Number(score),
+        knowledgePoint: knowledgePoint ?? existingQuestion.knowledgePoint,
+        referenceAnswer: referenceAnswer ?? existingQuestion.referenceAnswer,
+        explanation: explanation ?? existingQuestion.explanation,
+        orderIndex:
+          orderIndex === undefined ? existingQuestion.orderIndex : Number(orderIndex),
+      },
+    })
+
+    res.json({
+      message: '题目更新成功',
+      data: updatedQuestion,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: '题目更新失败',
+      error: error.message,
+    })
+  }
+})
+
+router.delete('/admin/questions/:questionId', requireAdmin, async (req, res) => {
+  try {
+    const { questionId } = req.params
+
+    const existingQuestion = await prisma.question.findUnique({
+      where: {
+        id: questionId,
+      },
+    })
+
+    if (!existingQuestion) {
+      return res.status(404).json({
+        message: '题目不存在',
+      })
+    }
+
+    await prisma.question.delete({
+      where: {
+        id: questionId,
+      },
+    })
+
+    res.json({
+      message: '题目删除成功',
+      data: existingQuestion,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: '题目删除失败',
+      error: error.message,
+    })
+  }
+})
+
 module.exports = router
