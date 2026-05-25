@@ -27,6 +27,7 @@ const parsedQuestions = ref([])
 const parsedFileName = ref('')
 const isParsingFile = ref(false)
 const isImportingQuestions = ref(false)
+const showImportExample = ref(false)
 
 const form = ref({
   title: '',
@@ -52,6 +53,38 @@ const typeNameMap = {
   READING: '阅读理解',
   CLOZE: '完形填空',
 }
+
+const importExampleText = `【单选题】
+1. She ___ to school every day.
+A. go
+B. goes
+C. went
+D. going
+答案：B
+解析：主语 She 是第三人称单数，一般现在时动词要加 s。
+知识点：一般现在时
+分值：2
+
+【翻译题】
+2. 请将下面句子翻译成英文：我喜欢学习英语。
+参考答案：I like learning English.
+解析：like doing something 表示喜欢做某事。
+知识点：翻译
+分值：5
+
+【改错题】
+3. He go to school yesterday. 请改正。
+参考答案：He went to school yesterday.
+解析：yesterday 表示过去时间，go 应改为 went。
+知识点：一般过去时
+分值：5
+
+【写作题】
+4. 请以 My Family 为题写一篇不少于 50 词的短文。
+参考答案：I have a happy family.
+解析：文章应包含家庭成员、人物特点和情感表达。
+知识点：写作
+分值：10`
 
 const formatTimeLimit = (seconds) => {
   return `${Math.round(Number(seconds || 0) / 60)} 分钟`
@@ -221,6 +254,16 @@ const handleImportQuestions = async () => {
   }
 }
 
+const copyImportExample = async () => {
+  try {
+    await navigator.clipboard.writeText(importExampleText)
+    successMessage.value = '标准导入格式已复制，可以粘贴到 txt 或 docx 文件中。'
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = '复制失败，请手动复制示例文本。'
+  }
+}
+
 onMounted(() => {
   loadAdminExams()
 })
@@ -346,6 +389,26 @@ onMounted(() => {
           <p class="import-tip">
             支持上传 .txt 或 .docx 文件。建议使用标准格式：题型标题、题号、选项、答案、解析、知识点、分值。
           </p>
+
+          <div class="import-example-actions">
+            <button
+              class="secondary-btn"
+              @click="showImportExample = !showImportExample"
+            >
+              {{ showImportExample ? '收起格式示例' : '查看标准格式示例' }}
+            </button>
+
+            <button
+              class="secondary-btn"
+              @click="copyImportExample"
+            >
+              复制示例文本
+            </button>
+          </div>
+
+          <div v-if="showImportExample" class="import-example-box">
+            <pre>{{ importExampleText }}</pre>
+          </div>
 
           <label>
             选择目标试卷

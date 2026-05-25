@@ -1304,3 +1304,29 @@ h1 {
 .admin-full-card {
   margin-top: 24px;
 }
+.import-example-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 14px 0 18px;
+}
+
+.import-example-box {
+  margin: 0 0 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.import-example-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #374151;
+  line-height: 1.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
