@@ -4,6 +4,7 @@ require('dotenv').config()
 
 const examRoutes = require('./src/routes/examRoutes')
 const authRoutes = require('./src/routes/authRoutes')
+const adminRoutes = require('./src/routes/adminRoutes')
 
 const app = express()
 
@@ -33,6 +34,20 @@ app.use(
 
 app.use(express.json())
 
+app.get('/', (req, res) => {
+  res.json({
+    message: 'English Exam System Backend API',
+    status: 'ok',
+    docs: {
+      health: '/api/health',
+      exams: '/api/exams',
+      login: '/api/auth/login',
+      register: '/api/auth/register',
+      adminExams: '/api/admin/exams',
+    },
+  })
+})
+
 app.get('/api/health', (req, res) => {
   res.json({
     message: 'Backend is running',
@@ -43,6 +58,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api', examRoutes)
 app.use('/api', authRoutes)
+app.use('/api', adminRoutes)
 
 app.use((req, res) => {
   res.status(404).json({
