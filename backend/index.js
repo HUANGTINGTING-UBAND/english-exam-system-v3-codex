@@ -1,8 +1,10 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
+
 const examRoutes = require('./src/routes/examRoutes')
 const authRoutes = require('./src/routes/authRoutes')
+
 const app = express()
 
 const allowedOrigins = [
@@ -16,7 +18,9 @@ app.use(
       if (
         !origin ||
         allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app')
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.app.github.dev') ||
+        origin.endsWith('.github.dev')
       ) {
         callback(null, true)
         return
@@ -27,17 +31,8 @@ app.use(
     credentials: true,
   })
 )
+
 app.use(express.json())
-app.use('/api', examRoutes)
-app.use('/api', authRoutes)
-
-const PORT = process.env.PORT || 3000
-
-app.get('/', (req, res) => {
-  res.json({
-    message: 'English Exam System Backend',
-  })
-})
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -46,6 +41,20 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   })
 })
+
+app.use('/api', examRoutes)
+app.use('/api', authRoutes)
+
+app.use((err, req, res, next) => {
+  console.error(err)
+
+  res.status(500).json({
+    message: 'Server error',
+    error: process.env.NODE_ENV === 'production' ? undefined : err.message,
+  })
+})
+
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
   console.log(`Backend server is running on port ${PORT}`)
