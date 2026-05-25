@@ -1054,3 +1054,57 @@ h1 {
   gap: 12px;
   flex-wrap: wrap;
 }
+.admin-guard-card,
+.admin-welcome-card {
+  max-width: 960px;
+  margin: 0 auto 24px;
+  padding: 28px;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.admin-guard-card h2,
+.admin-welcome-card h2 {
+  margin-top: 0;
+}
+
+.admin-guard-card p,
+.admin-welcome-card p {
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+.admin-section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.admin-card {
+  padding: 24px;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.admin-card h3 {
+  margin-top: 0;
+}
+
+.admin-card p {
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+@media (max-width: 760px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
