@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { getSavedUser } from '../api/authApi'
 import {
   createAdminExam,
+  getAdminExamQuestions,
   getAdminExams,
   importQuestionsToExam,
   parseQuestionFile,
@@ -28,6 +29,11 @@ const parsedFileName = ref('')
 const isParsingFile = ref(false)
 const isImportingQuestions = ref(false)
 const showImportExample = ref(false)
+
+const selectedQuestionExamId = ref('')
+const selectedQuestionExamTitle = ref('')
+const adminQuestions = ref([])
+const isLoadingQuestions = ref(false)
 
 const form = ref({
   title: '',
@@ -96,6 +102,23 @@ const formatDateTime = (dateValue) => {
   }
 
   return new Date(dateValue).toLocaleString()
+}
+
+const formatAnswer = (question) => {
+  if (question.answer === null || question.answer === undefined || question.answer === '') {
+    return '暂无'
+  }
+
+  if (question.type === 'CHOICE' && Array.isArray(question.options)) {
+    const index = Number(question.answer)
+    const option = question.options[index]
+
+    if (option) {
+      return `${String.fromCharCode(65 + index)}. ${option}`
+    }
+  }
+
+  return String(question.answer)
 }
 
 const loadAdminExams = async () => {
@@ -246,6 +269,10 @@ const handleImportQuestions = async () => {
     selectedFile.value = null
     parsedFileName.value = ''
     await loadAdminExams()
+
+    if (selectedQuestionExamId.value === selectedExamId.value) {
+      await handleLoadQuestionsByExamId(selectedExamId.value)
+    }
   } catch (error) {
     console.error(error)
     errorMessage.value = error.message || '题目导入失败'
@@ -261,6 +288,27 @@ const copyImportExample = async () => {
   } catch (error) {
     console.error(error)
     errorMessage.value = '复制失败，请手动复制示例文本。'
+  }
+}
+
+const handleLoadQuestions = async (exam) => {
+  selectedQuestionExamId.value = exam.id
+  selectedQuestionExamTitle.value = exam.title
+  await handleLoadQuestionsByExamId(exam.id)
+}
+
+const handleLoadQuestionsByExamId = async (examId) => {
+  errorMessage.value = ''
+  successMessage.value = ''
+  isLoadingQuestions.value = true
+
+  try {
+    adminQuestions.value = await getAdminExamQuestions(examId)
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '题目列表加载失败'
+  } finally {
+    isLoadingQuestions.value = false
   }
 }
 
@@ -523,6 +571,13 @@ onMounted(() => {
             <div class="admin-exam-actions">
               <button
                 class="secondary-btn"
+                @click="handleLoadQuestions(exam)"
+              >
+                查看题目
+              </button>
+
+              <button
+                class="secondary-btn"
                 @click="handleTogglePublish(exam)"
               >
                 {{ exam.isPublished ? '下架' : '发布' }}
@@ -533,6 +588,75 @@ onMounted(() => {
 
         <p v-else class="empty-text">
           暂无试卷。
+        </p>
+      </div>
+
+      <div v-if="selectedQuestionExamId" class="admin-question-card">
+        <div class="section-title-row">
+          <h2>题目列表：{{ selectedQuestionExamTitle }}</h2>
+          <button
+            class="secondary-btn"
+            @click="handleLoadQuestionsByExamId(selectedQuestionExamId)"
+          >
+            刷新题目
+          </button>
+        </div>
+
+        <div v-if="isLoadingQuestions" class="loading-box">
+          正在加载题目……
+        </div>
+
+        <div v-else-if="adminQuestions.length > 0" class="admin-question-list">
+          <div
+            v-for="question in adminQuestions"
+            :key="question.id"
+            class="admin-question-item"
+          >
+            <div class="admin-question-header">
+              <span class="question-order">
+                第 {{ question.orderIndex }} 题
+              </span>
+
+              <span class="question-type">
+                {{ typeNameMap[question.type] || question.type }}
+              </span>
+
+              <span class="question-score">
+                {{ question.score }} 分
+              </span>
+            </div>
+
+            <h3>{{ question.text }}</h3>
+
+            <ul v-if="question.options && question.options.length > 0">
+              <li
+                v-for="(option, index) in question.options"
+                :key="option"
+              >
+                {{ String.fromCharCode(65 + index) }}. {{ option }}
+              </li>
+            </ul>
+
+            <p>
+              <strong>答案：</strong>{{ formatAnswer(question) }}
+            </p>
+
+            <p>
+              <strong>知识点：</strong>{{ question.knowledgePoint || '未分类' }}
+            </p>
+
+            <p v-if="question.referenceAnswer">
+              <strong>参考答案：</strong>{{ question.referenceAnswer }}
+            </p>
+
+            <p v-if="question.explanation">
+              <strong>解析：</strong>{{ question.explanation }}
+            </p>
+          </div>
+        </div>
+
+        <p v-else class="empty-text">
+          当前试卷暂无题目。
         </p>
       </div>
     </section>

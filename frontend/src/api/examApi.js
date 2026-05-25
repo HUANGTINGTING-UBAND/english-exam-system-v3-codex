@@ -147,6 +147,16 @@ export const updateAdminExamPublishStatus = async (examId, isPublished) => {
   return parseResponse(response, '更新试卷发布状态失败')
 }
 
+export const getAdminExamQuestions = async (examId) => {
+  const response = await fetch(`${API_BASE_URL}/admin/exams/${examId}/questions`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '获取管理员题目列表失败')
+}
+
 export const parseQuestionFile = async (file) => {
   const formData = new FormData()
   formData.append('file', file)
