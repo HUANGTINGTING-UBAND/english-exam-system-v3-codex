@@ -1035,3 +1035,22 @@ h1 {
     border-radius: 18px;
   }
 }
+.login-tip-box {
+  margin: 20px 0;
+  padding: 18px;
+  border-radius: 16px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+}
+
+.login-tip-box p {
+  margin: 0 0 14px;
+  line-height: 1.7;
+}
+
+.login-tip-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}

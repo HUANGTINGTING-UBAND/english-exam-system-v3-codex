@@ -7,6 +7,7 @@ import {
   submitExamAttempt,
   saveWrongQuestions,
 } from '../api/examApi'
+import { getSavedUser } from '../api/authApi'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
@@ -15,6 +16,8 @@ const route = useRoute()
 const isStarted = ref(false)
 const isPaused = ref(false)
 const isSubmitted = ref(false)
+const currentUser = ref(getSavedUser())
+const showLoginTip = ref(false)
 
 const examData = ref(null)
 const questionsData = ref([])
@@ -398,6 +401,12 @@ const startTimer = () => {
 }
 
 const startExam = () => {
+  currentUser.value = getSavedUser()
+
+  if (!currentUser.value) {
+    showLoginTip.value = true
+  }
+
   isStarted.value = true
   isPaused.value = false
   isSubmitted.value = false
@@ -808,6 +817,22 @@ onBeforeUnmount(() => {
             用时：{{ formatCountdown(elapsedSeconds) }}
           </p>
         </div>
+        
+        <div v-if="showLoginTip" class="login-tip-box">
+         <p>
+           你当前处于游客模式。建议登录后再考试，这样考试记录和错题会保存到你的账号。
+         </p>
+
+         <div class="login-tip-actions">
+           <RouterLink class="primary-btn" to="/login">
+             去登录
+           </RouterLink>
+
+           <button class="secondary-btn" @click="showLoginTip = false">
+             继续游客考试
+           </button>
+         </div>
+       </div>
 
         <div class="timer-box">
           剩余时间：{{ formatCountdown(remainingTime) }}
