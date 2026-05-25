@@ -4,6 +4,62 @@ const { requireAdmin } = require('../middlewares/authMiddleware')
 
 const router = express.Router()
 
+const normalizeQuestionType = (type) => {
+  const typeText = String(type || '').toUpperCase()
+
+  const typeMap = {
+    CHOICE: 'CHOICE',
+    SINGLE_CHOICE: 'CHOICE',
+    单选题: 'CHOICE',
+    选择题: 'CHOICE',
+
+    TRANSLATION: 'TRANSLATION',
+    翻译题: 'TRANSLATION',
+
+    ERROR_CORRECTION: 'ERROR_CORRECTION',
+    改错题: 'ERROR_CORRECTION',
+
+    WRITING: 'WRITING',
+    写作题: 'WRITING',
+
+    READING: 'READING',
+    阅读理解: 'READING',
+
+    CLOZE: 'CLOZE',
+    完形填空: 'CLOZE',
+  }
+
+  return typeMap[typeText] || typeText || 'CHOICE'
+}
+
+const normalizeParsedQuestions = (questions) => {
+  if (!Array.isArray(questions)) {
+    return []
+  }
+
+  return questions.map((question, index) => {
+    const finalType = normalizeQuestionType(question.type)
+
+    return {
+      type: finalType,
+      text: String(question.text || '').trim(),
+      options:
+        finalType === 'CHOICE' && Array.isArray(question.options)
+          ? question.options.map((option) => String(option).trim()).filter(Boolean)
+          : null,
+      answer:
+        question.answer === undefined || question.answer === null || question.answer === ''
+          ? null
+          : question.answer,
+      score: Number(question.score || 0),
+      knowledgePoint: String(question.knowledgePoint || '未分类').trim(),
+      referenceAnswer: String(question.referenceAnswer || '').trim(),
+      explanation: String(question.explanation || '').trim(),
+      orderIndex: Number(question.orderIndex || index + 1),
+    }
+  }).filter((question) => question.text)
+}
+
 router.get('/admin/exams', requireAdmin, async (req, res) => {
   try {
     const exams = await prisma.exam.findMany({
@@ -265,7 +321,7 @@ router.post('/admin/exams/:examId/questions', requireAdmin, async (req, res) => 
       },
     })
 
-    const finalType = String(type).toUpperCase()
+    const finalType = normalizeQuestionType(type)
 
     const createdQuestion = await prisma.question.create({
       data: {
@@ -332,7 +388,7 @@ router.put('/admin/questions/:questionId', requireAdmin, async (req, res) => {
         id: questionId,
       },
       data: {
-        type: type ? String(type).toUpperCase() : existingQuestion.type,
+        type: type ? normalizeQuestionType(type) : existingQuestion.type,
         text: text ?? existingQuestion.text,
         options:
           options === undefined
@@ -395,6 +451,133 @@ router.delete('/admin/questions/:questionId', requireAdmin, async (req, res) => 
 
     res.status(500).json({
       message: '题目删除失败',
+      error: error.message,
+    })
+  }
+})
+
+router.post('/admin/ai/parse-questions', requireAdmin, async (req, res) => {
+  try {
+    const { rawText, gradeLevel, examTitle } = req.body
+
+    if (!rawText || !String(rawText).trim()) {
+      return res.status(400).json({
+        message: '请提供需要解析的试卷文本',
+      })
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        message: '服务器尚未配置 OPENAI_API_KEY，暂时无法使用 AI 解析',
+      })
+    }
+
+    const prompt = `
+你是一个英语考试系统的试卷解析助手。
+
+请把下面的英语试卷文本解析为结构化 JSON。
+
+要求：
+1. 只返回 JSON，不要返回 Markdown，不要返回解释文字。
+2. JSON 顶层格式必须是：
+{
+  "questions": []
+}
+3. 每道题必须包含：
+{
+  "type": "CHOICE | TRANSLATION | ERROR_CORRECTION | WRITING | READING | CLOZE",
+  "text": "题干",
+  "options": ["A选项", "B选项", "C选项", "D选项"] 或 null,
+  "answer": 选择题使用 0-based 数字索引，例如 A=0, B=1；主观题可用字符串或 null,
+  "score": 数字,
+  "knowledgePoint": "知识点",
+  "referenceAnswer": "参考答案",
+  "explanation": "解析",
+  "orderIndex": 数字
+}
+4. 如果没有解析到分值，默认选择题 2 分，翻译/改错 5 分，写作 10 分。
+5. 如果没有解析到知识点，请根据题目内容合理判断。
+6. 如果选择题答案是 A/B/C/D，请转换为 0/1/2/3。
+7. 如果题目没有解析，请不要编造题目。
+8. 适用学段：${gradeLevel || '未指定'}
+9. 试卷标题：${examTitle || '未指定'}
+
+试卷文本如下：
+${String(rawText).trim()}
+`
+
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a strict JSON parser for English exam papers. Output only valid JSON.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        response_format: {
+          type: 'json_object',
+        },
+        temperature: 0.2,
+      }),
+    })
+
+    const aiResult = await aiResponse.json()
+
+    if (!aiResponse.ok) {
+      console.error(aiResult)
+
+      return res.status(500).json({
+        message: 'AI 解析请求失败',
+        error: aiResult.error?.message || 'OpenAI API error',
+      })
+    }
+
+    const content = aiResult.choices?.[0]?.message?.content
+
+    if (!content) {
+      return res.status(500).json({
+        message: 'AI 没有返回可解析内容',
+      })
+    }
+
+    let parsed
+
+    try {
+      parsed = JSON.parse(content)
+    } catch (error) {
+      console.error('AI raw content:', content)
+
+      return res.status(500).json({
+        message: 'AI 返回内容不是合法 JSON',
+        error: error.message,
+      })
+    }
+
+    const questions = normalizeParsedQuestions(parsed.questions)
+
+    res.json({
+      message: 'AI 解析成功',
+      data: {
+        questions,
+        raw: parsed,
+      },
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: 'AI 解析失败',
       error: error.message,
     })
   }

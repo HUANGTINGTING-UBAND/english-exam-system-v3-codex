@@ -5,6 +5,8 @@ import { getSavedUser } from '../api/authApi'
 import {
   createAdminExam,
   getAdminExams,
+  importQuestionsToExam,
+  parseQuestionFile,
   updateAdminExamPublishStatus,
 } from '../api/examApi'
 
@@ -18,6 +20,13 @@ const exams = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+
+const selectedExamId = ref('')
+const selectedFile = ref(null)
+const parsedQuestions = ref([])
+const parsedFileName = ref('')
+const isParsingFile = ref(false)
+const isImportingQuestions = ref(false)
 
 const form = ref({
   title: '',
@@ -33,6 +42,15 @@ const gradeNameMap = {
   JUNIOR: '初中',
   SENIOR: '高中',
   COLLEGE: '大学',
+}
+
+const typeNameMap = {
+  CHOICE: '单选题',
+  TRANSLATION: '翻译题',
+  ERROR_CORRECTION: '改错题',
+  WRITING: '写作题',
+  READING: '阅读理解',
+  CLOZE: '完形填空',
 }
 
 const formatTimeLimit = (seconds) => {
@@ -57,6 +75,10 @@ const loadAdminExams = async () => {
 
   try {
     exams.value = await getAdminExams()
+
+    if (!selectedExamId.value && exams.value.length > 0) {
+      selectedExamId.value = exams.value[0].id
+    }
   } catch (error) {
     console.error(error)
     errorMessage.value = error.message || '管理员试卷列表加载失败'
@@ -86,7 +108,7 @@ const handleCreateExam = async () => {
   }
 
   try {
-    await createAdminExam({
+    const createdExam = await createAdminExam({
       title: form.value.title.trim(),
       gradeLevel: form.value.gradeLevel,
       description: form.value.description.trim(),
@@ -98,6 +120,7 @@ const handleCreateExam = async () => {
     successMessage.value = '试卷创建成功'
     resetForm()
     await loadAdminExams()
+    selectedExamId.value = createdExam.id
   } catch (error) {
     console.error(error)
     errorMessage.value = error.message || '试卷创建失败'
@@ -116,6 +139,85 @@ const handleTogglePublish = async (exam) => {
   } catch (error) {
     console.error(error)
     errorMessage.value = error.message || '试卷发布状态更新失败'
+  }
+}
+
+const handleFileChange = (event) => {
+  const file = event.target.files?.[0]
+
+  selectedFile.value = file || null
+  parsedQuestions.value = []
+  parsedFileName.value = ''
+  errorMessage.value = ''
+  successMessage.value = ''
+}
+
+const handleParseFile = async () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  if (!selectedFile.value) {
+    errorMessage.value = '请先选择 .txt 或 .docx 试卷文件'
+    return
+  }
+
+  isParsingFile.value = true
+
+  try {
+    const result = await parseQuestionFile(selectedFile.value)
+
+    parsedFileName.value = result.fileName
+    parsedQuestions.value = result.questions || []
+
+    successMessage.value = `文件解析成功，共识别 ${result.questionCount || parsedQuestions.value.length} 道题`
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '文件解析失败'
+  } finally {
+    isParsingFile.value = false
+  }
+}
+
+const handleImportQuestions = async () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  if (!selectedExamId.value) {
+    errorMessage.value = '请选择要导入题目的试卷'
+    return
+  }
+
+  if (parsedQuestions.value.length === 0) {
+    errorMessage.value = '当前没有可导入的题目'
+    return
+  }
+
+  const confirmed = window.confirm(
+    `确认将 ${parsedQuestions.value.length} 道题导入所选试卷吗？`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  isImportingQuestions.value = true
+
+  try {
+    const createdQuestions = await importQuestionsToExam(
+      selectedExamId.value,
+      parsedQuestions.value
+    )
+
+    successMessage.value = `题目导入成功，共导入 ${createdQuestions.length} 道题`
+    parsedQuestions.value = []
+    selectedFile.value = null
+    parsedFileName.value = ''
+    await loadAdminExams()
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '题目导入失败'
+  } finally {
+    isImportingQuestions.value = false
   }
 }
 
@@ -163,7 +265,7 @@ onMounted(() => {
       <div class="admin-welcome-card">
         <h2>欢迎，{{ currentUser.nickname || currentUser.username }}</h2>
         <p>
-          你当前拥有管理员权限。现在可以查看数据库试卷，并新增基础试卷。
+          你当前拥有管理员权限。现在可以查看数据库试卷、新增试卷，并通过文件批量导入题目。
         </p>
       </div>
 
@@ -238,53 +340,137 @@ onMounted(() => {
           </button>
         </div>
 
-        <div class="admin-list-card">
-          <div class="section-title-row">
-            <h2>数据库试卷列表</h2>
-            <button class="secondary-btn" @click="loadAdminExams">
-              刷新
+        <div class="admin-import-card">
+          <h2>批量导入题目</h2>
+
+          <p class="import-tip">
+            支持上传 .txt 或 .docx 文件。建议使用标准格式：题型标题、题号、选项、答案、解析、知识点、分值。
+          </p>
+
+          <label>
+            选择目标试卷
+            <select v-model="selectedExamId">
+              <option
+                v-for="exam in exams"
+                :key="exam.id"
+                :value="exam.id"
+              >
+                {{ exam.title }}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            上传试卷文件
+            <input
+              type="file"
+              accept=".txt,.docx"
+              @change="handleFileChange"
+            />
+          </label>
+
+          <div class="admin-import-actions">
+            <button
+              class="secondary-btn"
+              :disabled="isParsingFile"
+              @click="handleParseFile"
+            >
+              {{ isParsingFile ? '解析中……' : '解析文件' }}
+            </button>
+
+            <button
+              class="primary-btn"
+              :disabled="isImportingQuestions || parsedQuestions.length === 0"
+              @click="handleImportQuestions"
+            >
+              {{ isImportingQuestions ? '导入中……' : '确认导入题目' }}
             </button>
           </div>
 
-          <div v-if="isLoading" class="loading-box">
-            正在加载管理员试卷列表……
-          </div>
+          <p v-if="parsedFileName" class="import-file-name">
+            当前文件：{{ parsedFileName }}
+          </p>
 
-          <div v-else-if="exams.length > 0" class="admin-exam-list">
+          <div v-if="parsedQuestions.length > 0" class="parsed-question-list">
+            <h3>解析预览：{{ parsedQuestions.length }} 道题</h3>
+
             <div
-              v-for="exam in exams"
-              :key="exam.id"
-              class="admin-exam-item"
+              v-for="question in parsedQuestions"
+              :key="question.orderIndex"
+              class="parsed-question-item"
             >
-              <div>
-                <h3>{{ exam.title }}</h3>
-                <p>{{ exam.description || '暂无说明' }}</p>
+              <p class="tag">
+                {{ typeNameMap[question.type] || question.type }}
+              </p>
 
-                <div class="admin-exam-meta">
-                  <span>学段：{{ gradeNameMap[exam.gradeLevel] || exam.gradeLevel }}</span>
-                  <span>题目：{{ exam.questionCount }} 题</span>
-                  <span>满分：{{ exam.totalScore }} 分</span>
-                  <span>时长：{{ formatTimeLimit(exam.timeLimit) }}</span>
-                  <span>状态：{{ exam.isPublished ? '已发布' : '已下架' }}</span>
-                  <span>创建：{{ formatDateTime(exam.createdAt) }}</span>
-                </div>
-              </div>
+              <h4>
+                {{ question.orderIndex }}. {{ question.text }}
+              </h4>
 
-              <div class="admin-exam-actions">
-                <button
-                  class="secondary-btn"
-                  @click="handleTogglePublish(exam)"
+              <ul v-if="question.options && question.options.length > 0">
+                <li
+                  v-for="(option, index) in question.options"
+                  :key="option"
                 >
-                  {{ exam.isPublished ? '下架' : '发布' }}
-                </button>
-              </div>
+                  {{ String.fromCharCode(65 + index) }}. {{ option }}
+                </li>
+              </ul>
+
+              <p>答案：{{ question.answer }}</p>
+              <p>知识点：{{ question.knowledgePoint }}</p>
+              <p>分值：{{ question.score }}</p>
+              <p v-if="question.explanation">解析：{{ question.explanation }}</p>
             </div>
           </div>
-
-          <p v-else class="empty-text">
-            暂无试卷。
-          </p>
         </div>
+      </div>
+
+      <div class="admin-list-card admin-full-card">
+        <div class="section-title-row">
+          <h2>数据库试卷列表</h2>
+          <button class="secondary-btn" @click="loadAdminExams">
+            刷新
+          </button>
+        </div>
+
+        <div v-if="isLoading" class="loading-box">
+          正在加载管理员试卷列表……
+        </div>
+
+        <div v-else-if="exams.length > 0" class="admin-exam-list">
+          <div
+            v-for="exam in exams"
+            :key="exam.id"
+            class="admin-exam-item"
+          >
+            <div>
+              <h3>{{ exam.title }}</h3>
+              <p>{{ exam.description || '暂无说明' }}</p>
+
+              <div class="admin-exam-meta">
+                <span>学段：{{ gradeNameMap[exam.gradeLevel] || exam.gradeLevel }}</span>
+                <span>题目：{{ exam.questionCount }} 题</span>
+                <span>满分：{{ exam.totalScore }} 分</span>
+                <span>时长：{{ formatTimeLimit(exam.timeLimit) }}</span>
+                <span>状态：{{ exam.isPublished ? '已发布' : '已下架' }}</span>
+                <span>创建：{{ formatDateTime(exam.createdAt) }}</span>
+              </div>
+            </div>
+
+            <div class="admin-exam-actions">
+              <button
+                class="secondary-btn"
+                @click="handleTogglePublish(exam)"
+              >
+                {{ exam.isPublished ? '下架' : '发布' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p v-else class="empty-text">
+          暂无试卷。
+        </p>
       </div>
     </section>
   </div>

@@ -146,3 +146,33 @@ export const updateAdminExamPublishStatus = async (examId, isPublished) => {
 
   return parseResponse(response, '更新试卷发布状态失败')
 }
+
+export const parseQuestionFile = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch(`${API_BASE_URL}/admin/import/parse-file`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+    },
+    body: formData,
+  })
+
+  return parseResponse(response, '解析试卷文件失败')
+}
+
+export const importQuestionsToExam = async (examId, questions) => {
+  const response = await fetch(`${API_BASE_URL}/admin/exams/${examId}/import-questions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({
+      questions,
+    }),
+  })
+
+  return parseResponse(response, '批量导入题目失败')
+}
