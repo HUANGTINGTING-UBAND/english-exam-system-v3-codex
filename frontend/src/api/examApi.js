@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token')
 
@@ -11,39 +12,44 @@ const getAuthHeaders = () => {
   }
 }
 
+const parseResponse = async (response, defaultErrorMessage) => {
+  const contentType = response.headers.get('content-type') || ''
+
+  if (!contentType.includes('application/json')) {
+    const text = await response.text()
+    console.error('Non-JSON response:', text)
+
+    throw new Error('服务器返回的不是 JSON，请检查 API 地址是否正确')
+  }
+
+  const result = await response.json()
+
+  if (!response.ok) {
+    throw new Error(result.message || defaultErrorMessage || '请求失败')
+  }
+
+  return result.data
+}
+
 export const getExams = async (grade) => {
   const query = grade ? `?grade=${grade}` : ''
   const response = await fetch(`${API_BASE_URL}/exams${query}`)
 
-  if (!response.ok) {
-    throw new Error('获取试卷列表失败')
-  }
-
-  const result = await response.json()
-  return result.data
+  return parseResponse(response, '获取试卷列表失败')
 }
 
 export const getExamById = async (examId) => {
   const response = await fetch(`${API_BASE_URL}/exams/${examId}`)
 
-  if (!response.ok) {
-    throw new Error('获取试卷详情失败')
-  }
-
-  const result = await response.json()
-  return result.data
+  return parseResponse(response, '获取试卷详情失败')
 }
 
 export const getQuestionsByExamId = async (examId) => {
   const response = await fetch(`${API_BASE_URL}/exams/${examId}/questions`)
 
-  if (!response.ok) {
-    throw new Error('获取题目列表失败')
-  }
-
-  const result = await response.json()
-  return result.data
+  return parseResponse(response, '获取题目列表失败')
 }
+
 export const submitExamAttempt = async (attemptData) => {
   const response = await fetch(`${API_BASE_URL}/attempts/submit`, {
     method: 'POST',
@@ -54,55 +60,89 @@ export const submitExamAttempt = async (attemptData) => {
     body: JSON.stringify(attemptData),
   })
 
-  if (!response.ok) {
-    throw new Error('提交考试结果失败')
-  }
-
-  const result = await response.json()
-  return result.data
+  return parseResponse(response, '提交考试结果失败')
 }
+
 export const getAttemptHistory = async () => {
   const response = await fetch(`${API_BASE_URL}/attempts/history`, {
-   headers: {
-    ...getAuthHeaders(),
-   },
+    headers: {
+      ...getAuthHeaders(),
+    },
   })
 
-  if (!response.ok) {
-    throw new Error('获取考试历史失败')
-  }
-
-  const result = await response.json()
-  return result.data
+  return parseResponse(response, '获取考试历史失败')
 }
+
 export const saveWrongQuestions = async (wrongQuestionData) => {
   const response = await fetch(`${API_BASE_URL}/wrong-questions`, {
     method: 'POST',
     headers: {
-     'Content-Type': 'application/json',
-     ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify(wrongQuestionData),
   })
 
-  if (!response.ok) {
-    throw new Error('保存错题失败')
-  }
-
-  const result = await response.json()
-  return result.data
+  return parseResponse(response, '保存错题失败')
 }
 
 export const getWrongQuestions = async () => {
   const response = await fetch(`${API_BASE_URL}/wrong-questions`, {
-   headers: {
-    ...getAuthHeaders(),
-   },
-   })
-  if (!response.ok) {
-    throw new Error('获取错题本失败')
-  }
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
 
-  const result = await response.json()
-  return result.data
+  return parseResponse(response, '获取错题本失败')
+}
+
+export const getAdminExams = async () => {
+  const response = await fetch(`${API_BASE_URL}/admin/exams`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '获取管理员试卷列表失败')
+}
+
+export const createAdminExam = async (examData) => {
+  const response = await fetch(`${API_BASE_URL}/admin/exams`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(examData),
+  })
+
+  return parseResponse(response, '创建试卷失败')
+}
+
+export const updateAdminExam = async (examId, examData) => {
+  const response = await fetch(`${API_BASE_URL}/admin/exams/${examId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(examData),
+  })
+
+  return parseResponse(response, '更新试卷失败')
+}
+
+export const updateAdminExamPublishStatus = async (examId, isPublished) => {
+  const response = await fetch(`${API_BASE_URL}/admin/exams/${examId}/publish`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({
+      isPublished,
+    }),
+  })
+
+  return parseResponse(response, '更新试卷发布状态失败')
 }
