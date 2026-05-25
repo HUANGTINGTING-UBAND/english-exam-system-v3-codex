@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { getSavedUser } from '../api/authApi'
 import {
   createAdminExam,
+  deleteAdminQuestion,
   getAdminExamQuestions,
   getAdminExams,
   importQuestionsToExam,
@@ -309,6 +310,33 @@ const handleLoadQuestionsByExamId = async (examId) => {
     errorMessage.value = error.message || '题目列表加载失败'
   } finally {
     isLoadingQuestions.value = false
+  }
+}
+
+const handleDeleteQuestion = async (question) => {
+  const confirmed = window.confirm(
+    `确认删除第 ${question.orderIndex} 题吗？删除后学生端将不再显示这道题。`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await deleteAdminQuestion(question.id)
+
+    successMessage.value = '题目删除成功'
+    await loadAdminExams()
+
+    if (selectedQuestionExamId.value) {
+      await handleLoadQuestionsByExamId(selectedQuestionExamId.value)
+    }
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '题目删除失败'
   }
 }
 
@@ -652,6 +680,15 @@ onMounted(() => {
             <p v-if="question.explanation">
               <strong>解析：</strong>{{ question.explanation }}
             </p>
+
+            <div class="admin-question-actions">
+              <button
+                class="danger-btn"
+                @click="handleDeleteQuestion(question)"
+              >
+                删除题目
+              </button>
+            </div>
           </div>
         </div>
 

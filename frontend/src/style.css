@@ -1391,3 +1391,28 @@ h1 {
   color: #4b5563;
   line-height: 1.7;
 }
+.admin-question-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.danger-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.danger-btn:hover {
+  background: #fecaca;
+}
+
+.danger-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

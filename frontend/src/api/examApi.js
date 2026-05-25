@@ -157,6 +157,17 @@ export const getAdminExamQuestions = async (examId) => {
   return parseResponse(response, '获取管理员题目列表失败')
 }
 
+export const deleteAdminQuestion = async (questionId) => {
+  const response = await fetch(`${API_BASE_URL}/admin/questions/${questionId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '删除题目失败')
+}
+
 export const parseQuestionFile = async (file) => {
   const formData = new FormData()
   formData.append('file', file)
