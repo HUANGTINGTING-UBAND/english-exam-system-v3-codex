@@ -1780,3 +1780,66 @@ h1 {
   flex-wrap: wrap;
   margin-top: 16px;
 }
+.learning-overview-card {
+  margin: 0 auto 24px;
+  padding: 28px;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.learning-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.learning-stat-item {
+  padding: 18px;
+  border-radius: 16px;
+  background: #f9fafb;
+}
+
+.learning-stat-item span {
+  display: block;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.learning-stat-item strong {
+  font-size: 26px;
+  color: #111827;
+}
+
+.learning-suggestion-box,
+.latest-attempt-box {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.learning-suggestion-box h3,
+.latest-attempt-box h3 {
+  margin-top: 0;
+}
+
+.learning-suggestion-box p,
+.latest-attempt-box p {
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+@media (max-width: 960px) {
+  .learning-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .learning-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

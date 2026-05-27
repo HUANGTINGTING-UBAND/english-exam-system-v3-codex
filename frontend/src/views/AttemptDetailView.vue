@@ -30,6 +30,22 @@ const wrongCount = computed(() => {
   return detail.value?.answers?.filter((item) => item.isCorrect === false).length || 0
 })
 
+const fullScore = computed(() => {
+  return Number(detail.value?.exam?.totalScore || 0)
+})
+
+const actualScore = computed(() => {
+  return Number(detail.value?.attempt?.totalScore || 0)
+})
+
+const scoreRate = computed(() => {
+  if (!fullScore.value) {
+    return 0
+  }
+
+  return Math.round((actualScore.value / fullScore.value) * 100)
+})
+
 const formatDateTime = (dateValue) => {
   if (!dateValue) {
     return '暂无'
@@ -114,8 +130,18 @@ onMounted(() => {
 
         <div class="attempt-summary-grid">
           <div>
-            <span>总分</span>
-            <strong>{{ formatScore(detail.attempt.totalScore) }}</strong>
+            <span>本次得分</span>
+            <strong>{{ actualScore }} / {{ fullScore }}</strong>
+          </div>
+
+          <div>
+            <span>得分率</span>
+            <strong>{{ scoreRate }}%</strong>
+          </div>
+
+          <div>
+            <span>正确率</span>
+            <strong>{{ detail.attempt.accuracyRate }}%</strong>
           </div>
 
           <div>
@@ -126,11 +152,6 @@ onMounted(() => {
           <div>
             <span>主观题得分</span>
             <strong>{{ formatScore(detail.attempt.subjectiveScore) }}</strong>
-          </div>
-
-          <div>
-            <span>正确率</span>
-            <strong>{{ detail.attempt.accuracyRate }}%</strong>
           </div>
 
           <div>

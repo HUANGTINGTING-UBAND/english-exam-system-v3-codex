@@ -13,23 +13,57 @@ const app = express()
 
 const allowedOrigins = [
   'http://localhost:5173',
+  'http://127.0.0.1:5173',
   process.env.FRONTEND_URL,
 ].filter(Boolean)
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) {
+    return true
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true
+  }
+
+  if (origin.includes('localhost')) {
+    return true
+  }
+
+  if (origin.includes('127.0.0.1')) {
+    return true
+  }
+
+  if (origin.includes('vercel.app')) {
+    return true
+  }
+
+  if (origin.includes('github.dev')) {
+    return true
+  }
+
+  if (origin.includes('app.github.dev')) {
+    return true
+  }
+
+  if (origin.includes('githubpreview.dev')) {
+    return true
+  }
+
+  return false
+}
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        origin.includes('vercel.app') ||
-        origin.includes('github.dev')
-      ) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true)
         return
       }
 
-      callback(new Error('Not allowed by CORS'))
+      console.warn('Blocked by CORS:', origin)
+
+      callback(null, false)
     },
     credentials: true,
   })
@@ -64,12 +98,23 @@ app.get('/api/health', (req, res) => {
   })
 })
 
-app.use('/api', examRoutes)
-app.use('/api', authRoutes)
-app.use('/api', adminRoutes)
-app.use('/api', adminImportRoutes)
-app.use('/api', resultRoutes)
-app.use('/api', wrongPracticeRoutes)
+const routeList = [
+  ['examRoutes', examRoutes],
+  ['authRoutes', authRoutes],
+  ['adminRoutes', adminRoutes],
+  ['adminImportRoutes', adminImportRoutes],
+  ['resultRoutes', resultRoutes],
+  ['wrongPracticeRoutes', wrongPracticeRoutes],
+]
+
+for (const [routeName, routeHandler] of routeList) {
+  if (typeof routeHandler !== 'function') {
+    console.error(`${routeName} is not a valid Express router. Please check module.exports in that route file.`)
+    process.exit(1)
+  }
+
+  app.use('/api', routeHandler)
+}
 
 app.use((req, res) => {
   res.status(404).json({
@@ -81,12 +126,8 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(err)
 
-  const isCorsError = err.message === 'Not allowed by CORS'
-
-  res.status(isCorsError ? 403 : 500).json({
-    message: isCorsError
-      ? '当前前端地址不允许访问后端，请检查 CORS 配置'
-      : err.message || '服务器内部错误',
+  res.status(500).json({
+    message: err.message || '服务器内部错误',
     error: process.env.NODE_ENV === 'production' ? undefined : err.message,
   })
 })

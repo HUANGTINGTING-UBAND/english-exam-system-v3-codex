@@ -33,6 +33,95 @@ const gradeNameMap = {
   COLLEGE: '大学',
 }
 
+const totalAttempts = computed(() => {
+  return attemptHistory.value.length
+})
+
+const totalWrongQuestions = computed(() => {
+  return wrongQuestions.value.length
+})
+
+const getAttemptFullScore = (attempt) => {
+  return Number(attempt.examTotalScore || attempt.fullScore || 0)
+}
+
+const getAttemptScore = (attempt) => {
+  return Number(attempt.totalScore || 0)
+}
+
+const getScoreRate = (attempt) => {
+  const score = getAttemptScore(attempt)
+  const fullScore = getAttemptFullScore(attempt)
+
+  if (!fullScore) {
+    return 0
+  }
+
+  return Math.round((score / fullScore) * 100)
+}
+
+const averageScoreRate = computed(() => {
+  if (attemptHistory.value.length === 0) {
+    return 0
+  }
+
+  const totalRate = attemptHistory.value.reduce((sum, item) => {
+    return sum + getScoreRate(item)
+  }, 0)
+
+  return Math.round(totalRate / attemptHistory.value.length)
+})
+
+const bestScoreRate = computed(() => {
+  if (attemptHistory.value.length === 0) {
+    return 0
+  }
+
+  return Math.max(
+    ...attemptHistory.value.map((item) => getScoreRate(item))
+  )
+})
+
+const averageAccuracy = computed(() => {
+  if (attemptHistory.value.length === 0) {
+    return 0
+  }
+
+  const total = attemptHistory.value.reduce((sum, item) => {
+    return sum + Number(item.accuracyRate || 0)
+  }, 0)
+
+  return Math.round(total / attemptHistory.value.length)
+})
+
+const latestAttempt = computed(() => {
+  if (attemptHistory.value.length === 0) {
+    return null
+  }
+
+  return attemptHistory.value[0]
+})
+
+const learningSuggestion = computed(() => {
+  if (attemptHistory.value.length === 0) {
+    return '先完成一套试卷，系统会根据你的考试记录生成学习建议。'
+  }
+
+  if (averageScoreRate.value >= 85 && averageAccuracy.value >= 85 && totalWrongQuestions.value <= 3) {
+    return '整体表现不错，可以继续挑战更高难度试卷，并保持错题复盘。'
+  }
+
+  if (totalWrongQuestions.value >= 8) {
+    return '当前错题较多，建议优先完成错题重练，把错题逐步标记为已掌握。'
+  }
+
+  if (averageScoreRate.value < 60 || averageAccuracy.value < 60) {
+    return '得分率或正确率偏低，建议先复习基础知识点，再进行整卷训练。'
+  }
+
+  return '继续保持练习节奏，建议每次考试后查看结果详情并处理错题。'
+})
+
 const formatDateTime = (dateValue) => {
   if (!dateValue) {
     return '暂无'
@@ -92,6 +181,13 @@ const loadWrongQuestions = async () => {
   }
 }
 
+const refreshProfileData = async () => {
+  await Promise.all([
+    loadAttemptHistory(),
+    loadWrongQuestions(),
+  ])
+}
+
 const handleMarkMastered = async (item) => {
   const confirmed = window.confirm(
     `确认将这道错题标记为已掌握吗？\n\n标记后它会从错题本中移除。`
@@ -119,8 +215,7 @@ const handleMarkMastered = async (item) => {
 }
 
 onMounted(() => {
-  loadAttemptHistory()
-  loadWrongQuestions()
+  refreshProfileData()
 })
 </script>
 
@@ -130,7 +225,7 @@ onMounted(() => {
       <p class="tag">Profile</p>
       <h1>个人中心</h1>
       <p class="desc">
-        查看你的账号信息、考试历史和错题记录。
+        查看你的账号信息、学习数据、考试历史和错题记录。
       </p>
     </div>
 
@@ -176,6 +271,10 @@ onMounted(() => {
             管理员后台
           </RouterLink>
 
+          <button class="secondary-btn" @click="refreshProfileData">
+            刷新数据
+          </button>
+
           <button class="secondary-btn" @click="handleLogout">
             退出登录
           </button>
@@ -184,6 +283,64 @@ onMounted(() => {
 
       <div v-if="successMessage" class="api-success">
         {{ successMessage }}
+      </div>
+
+      <div class="learning-overview-card">
+        <div class="section-title-row">
+          <h2>学习数据概览</h2>
+        </div>
+
+        <div class="learning-stats-grid">
+          <div class="learning-stat-item">
+            <span>考试次数</span>
+            <strong>{{ totalAttempts }}</strong>
+          </div>
+
+          <div class="learning-stat-item">
+            <span>平均得分率</span>
+            <strong>{{ averageScoreRate }}%</strong>
+          </div>
+
+          <div class="learning-stat-item">
+            <span>最高得分率</span>
+            <strong>{{ bestScoreRate }}%</strong>
+          </div>
+
+          <div class="learning-stat-item">
+            <span>平均正确率</span>
+            <strong>{{ averageAccuracy }}%</strong>
+          </div>
+
+          <div class="learning-stat-item">
+            <span>当前错题</span>
+            <strong>{{ totalWrongQuestions }}</strong>
+          </div>
+        </div>
+
+        <div class="learning-suggestion-box">
+          <h3>学习建议</h3>
+          <p>{{ learningSuggestion }}</p>
+        </div>
+
+        <div v-if="latestAttempt" class="latest-attempt-box">
+          <h3>最近一次考试</h3>
+          <p>
+            {{ latestAttempt.examTitle || '未知试卷' }}
+          </p>
+          <p>
+            得分：{{ getAttemptScore(latestAttempt) }} / {{ getAttemptFullScore(latestAttempt) }} 分 /
+            得分率：{{ getScoreRate(latestAttempt) }}% /
+            正确率：{{ latestAttempt.accuracyRate }}% /
+            用时：{{ formatUsedTime(latestAttempt.usedTime) }}
+          </p>
+
+          <RouterLink
+            class="secondary-btn"
+            :to="`/attempts/${latestAttempt.id}`"
+          >
+            查看最近考试详情
+          </RouterLink>
+        </div>
       </div>
 
       <div class="profile-grid">
@@ -212,7 +369,10 @@ onMounted(() => {
               <div>
                 <h3>{{ attempt.examTitle || '未知试卷' }}</h3>
                 <p>
-                  总分：{{ attempt.totalScore }} 分 /
+                  得分：{{ getAttemptScore(attempt) }} / {{ getAttemptFullScore(attempt) }} 分
+                </p>
+                <p>
+                  得分率：{{ getScoreRate(attempt) }}% /
                   正确率：{{ attempt.accuracyRate }}%
                 </p>
                 <p>

@@ -1,45 +1,172 @@
-const { optionalAuth } = require('../middlewares/authMiddleware')
 const express = require('express')
 const prisma = require('../lib/prisma')
+const { requireAuth } = require('../middlewares/authMiddleware')
 
 const router = express.Router()
+
+const normalizeSubmitType = (submitType) => {
+  const text = String(submitType || 'MANUAL').trim().toUpperCase()
+
+  const allowedTypes = ['MANUAL', 'AUTO', 'TIMEOUT']
+
+  if (allowedTypes.includes(text)) {
+    return text
+  }
+
+  return 'MANUAL'
+}
+
+const normalizeChoiceAnswer = (answer) => {
+  if (answer === null || answer === undefined || answer === '') {
+    return null
+  }
+
+  if (typeof answer === 'number') {
+    return answer
+  }
+
+  const text = String(answer).trim().toUpperCase()
+
+  const letterMap = {
+    A: 0,
+    B: 1,
+    C: 2,
+    D: 3,
+  }
+
+  if (letterMap[text] !== undefined) {
+    return letterMap[text]
+  }
+
+  const numberValue = Number(text)
+
+  if (!Number.isNaN(numberValue)) {
+    return numberValue
+  }
+
+  return null
+}
+
+const getSelectedIndex = (answer) => {
+  if (!answer) {
+    return null
+  }
+
+  if (answer.selectedIndex !== undefined && answer.selectedIndex !== null) {
+    return normalizeChoiceAnswer(answer.selectedIndex)
+  }
+
+  if (answer.answer !== undefined && answer.answer !== null) {
+    return normalizeChoiceAnswer(answer.answer)
+  }
+
+  if (answer.value !== undefined && answer.value !== null) {
+    return normalizeChoiceAnswer(answer.value)
+  }
+
+  return normalizeChoiceAnswer(answer)
+}
+
+const getAnswerText = (answer) => {
+  if (!answer) {
+    return ''
+  }
+
+  if (typeof answer === 'string' || typeof answer === 'number') {
+    return String(answer)
+  }
+
+  if (answer.answerText !== undefined && answer.answerText !== null) {
+    return String(answer.answerText)
+  }
+
+  if (answer.text !== undefined && answer.text !== null) {
+    return String(answer.text)
+  }
+
+  if (answer.value !== undefined && answer.value !== null) {
+    return String(answer.value)
+  }
+
+  if (answer.answer !== undefined && answer.answer !== null) {
+    return String(answer.answer)
+  }
+
+  return ''
+}
+
+const normalizeSubmittedAnswers = (answers) => {
+  if (Array.isArray(answers)) {
+    return answers.map((item) => ({
+      ...item,
+      questionId: item.questionId || item.id,
+    }))
+  }
+
+  if (answers && typeof answers === 'object') {
+    return Object.entries(answers).map(([questionId, value]) => {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return {
+          questionId,
+          ...value,
+        }
+      }
+
+      return {
+        questionId,
+        answer: value,
+        value,
+      }
+    })
+  }
+
+  return []
+}
 
 router.get('/exams', async (req, res) => {
   try {
     const { grade } = req.query
 
-    const where = {
-      isPublished: true,
-    }
-
-    if (grade) {
-      where.gradeLevel = String(grade).toUpperCase()
-    }
-
     const exams = await prisma.exam.findMany({
-      where,
+      where: {
+        isPublished: true,
+        ...(grade
+          ? {
+              gradeLevel: String(grade).toUpperCase(),
+            }
+          : {}),
+      },
       orderBy: {
-        createdAt: 'asc',
+        createdAt: 'desc',
       },
       include: {
         questions: {
           select: {
             id: true,
+            score: true,
           },
         },
       },
     })
 
-    const formattedExams = exams.map((exam) => ({
-      id: exam.id,
-      title: exam.title,
-      gradeLevel: exam.gradeLevel,
-      description: exam.description,
-      timeLimit: exam.timeLimit,
-      totalScore: exam.totalScore,
-      questionCount: exam.questions.length,
-      isPublished: exam.isPublished,
-    }))
+    const formattedExams = exams.map((exam) => {
+      const realTotalScore = exam.questions.reduce((sum, question) => {
+        return sum + Number(question.score || 0)
+      }, 0)
+
+      return {
+        id: exam.id,
+        title: exam.title,
+        gradeLevel: exam.gradeLevel,
+        description: exam.description,
+        timeLimit: exam.timeLimit,
+        totalScore: realTotalScore || exam.totalScore,
+        isPublished: exam.isPublished,
+        questionCount: exam.questions.length,
+        createdAt: exam.createdAt,
+        updatedAt: exam.updatedAt,
+      }
+    })
 
     res.json({
       message: 'Exams loaded successfully',
@@ -49,7 +176,8 @@ router.get('/exams', async (req, res) => {
     console.error(error)
 
     res.status(500).json({
-      message: 'Failed to load exams',
+      message: '试卷列表获取失败',
+      error: error.message,
     })
   }
 })
@@ -66,6 +194,7 @@ router.get('/exams/:examId', async (req, res) => {
         questions: {
           select: {
             id: true,
+            score: true,
           },
         },
       },
@@ -73,9 +202,13 @@ router.get('/exams/:examId', async (req, res) => {
 
     if (!exam) {
       return res.status(404).json({
-        message: 'Exam not found',
+        message: '试卷不存在',
       })
     }
+
+    const realTotalScore = exam.questions.reduce((sum, question) => {
+      return sum + Number(question.score || 0)
+    }, 0)
 
     res.json({
       message: 'Exam loaded successfully',
@@ -85,16 +218,18 @@ router.get('/exams/:examId', async (req, res) => {
         gradeLevel: exam.gradeLevel,
         description: exam.description,
         timeLimit: exam.timeLimit,
-        totalScore: exam.totalScore,
-        questionCount: exam.questions.length,
+        totalScore: realTotalScore || exam.totalScore,
         isPublished: exam.isPublished,
+        createdAt: exam.createdAt,
+        updatedAt: exam.updatedAt,
       },
     })
   } catch (error) {
     console.error(error)
 
     res.status(500).json({
-      message: 'Failed to load exam',
+      message: '试卷详情获取失败',
+      error: error.message,
     })
   }
 })
@@ -111,7 +246,7 @@ router.get('/exams/:examId/questions', async (req, res) => {
 
     if (!exam) {
       return res.status(404).json({
-        message: 'Exam not found',
+        message: '试卷不存在',
       })
     }
 
@@ -124,327 +259,390 @@ router.get('/exams/:examId/questions', async (req, res) => {
       },
     })
 
-    const formattedQuestions = questions.map((question) => ({
-      id: question.id,
-      examId: question.examId,
-      type: question.type,
-      text: question.text,
-      options: question.options,
-      answer: question.answer,
-      score: question.score,
-      knowledgePoint: question.knowledgePoint,
-      referenceAnswer: question.referenceAnswer,
-      explanation: question.explanation,
-      orderIndex: question.orderIndex,
-    }))
-
     res.json({
       message: 'Questions loaded successfully',
-      data: formattedQuestions,
+      data: questions,
     })
   } catch (error) {
     console.error(error)
 
     res.status(500).json({
-      message: 'Failed to load questions',
+      message: '题目列表获取失败',
+      error: error.message,
     })
   }
 })
 
-router.get('/attempts/history', optionalAuth, async (req, res) => {
+router.post('/attempts/submit', requireAuth, async (req, res) => {
   try {
-    let targetUser = req.user
-    if (!targetUser) {
-        targetUser = await prisma.user.findUnique({
-            where: {
-                 username: 'guest_student',
-            },
-       })
-    }
-    if (!targetUser) {
-      return res.json({
-         message: 'History loaded successfully',
-         data: [],
-       })
+    const {
+      examId,
+      answers,
+      submitType: rawSubmitType,
+      usedTime,
+      pauseCount,
+    } = req.body
+
+    const submitType = normalizeSubmitType(rawSubmitType)
+
+    if (!examId) {
+      return res.status(400).json({
+        message: '缺少试卷 ID',
+      })
     }
 
-    const attempts = await prisma.examAttempt.findMany({
+    const exam = await prisma.exam.findUnique({
       where: {
-        userId: targetUser.id,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      include: {
-        exam: true,
-        userAnswers: true,
+        id: examId,
       },
     })
 
-    const formattedAttempts = attempts.map((attempt) => ({
-      id: attempt.id,
-      examId: attempt.examId,
-      examTitle: attempt.exam.title,
-      totalScore: attempt.exam.totalScore,
-      earnedScore: attempt.totalScore,
-      accuracyRate: attempt.accuracyRate,
-      objectiveScore: attempt.objectiveScore,
-      subjectiveScore: attempt.subjectiveScore,
-      submitType: attempt.submitType,
-      usedTime: attempt.usedTime,
-      pauseCount: attempt.pauseCount,
-      totalPausedDuration: attempt.totalPausedDuration,
-      answerCount: attempt.userAnswers.length,
-      createdAt: attempt.createdAt,
-      submittedAt: attempt.submittedAt,
-    }))
+    if (!exam) {
+      return res.status(404).json({
+        message: '试卷不存在',
+      })
+    }
+
+    const questions = await prisma.question.findMany({
+      where: {
+        examId,
+      },
+      orderBy: {
+        orderIndex: 'asc',
+      },
+    })
+
+    if (questions.length === 0) {
+      return res.status(400).json({
+        message: '当前试卷暂无题目，不能提交考试',
+      })
+    }
+
+    const submittedAnswers = normalizeSubmittedAnswers(answers)
+
+    const submittedAnswerMap = new Map(
+      submittedAnswers
+        .filter((answer) => answer.questionId)
+        .map((answer) => [answer.questionId, answer])
+    )
+
+    let objectiveScore = 0
+    let subjectiveScore = 0
+    let correctCount = 0
+    let answeredCount = 0
+
+    const userAnswerData = questions.map((question) => {
+      const submittedAnswer = submittedAnswerMap.get(question.id)
+
+      const selectedIndex =
+        question.type === 'CHOICE'
+          ? getSelectedIndex(submittedAnswer)
+          : null
+
+      const answerText =
+        question.type === 'CHOICE'
+          ? ''
+          : getAnswerText(submittedAnswer)
+
+      const hasAnswer =
+        question.type === 'CHOICE'
+          ? selectedIndex !== null && selectedIndex !== undefined
+          : Boolean(answerText.trim())
+
+      if (hasAnswer) {
+        answeredCount += 1
+      }
+
+      let isCorrect = false
+      let score = 0
+
+      if (question.type === 'CHOICE') {
+        const correctIndex = normalizeChoiceAnswer(question.answer)
+
+        isCorrect =
+          selectedIndex !== null &&
+          selectedIndex !== undefined &&
+          correctIndex !== null &&
+          Number(selectedIndex) === Number(correctIndex)
+
+        if (isCorrect) {
+          score = Number(question.score || 0)
+          objectiveScore += score
+          correctCount += 1
+        }
+      } else {
+        isCorrect = false
+        score = 0
+        subjectiveScore += 0
+      }
+
+      return {
+        questionId: question.id,
+        answerText,
+        selectedIndex,
+        score,
+        isCorrect,
+      }
+    })
+
+    const realExamTotalScore = questions.reduce((sum, question) => {
+      return sum + Number(question.score || 0)
+    }, 0)
+
+    const totalScore = objectiveScore + subjectiveScore
+
+    const accuracyRate =
+      questions.length > 0
+        ? Math.round((correctCount / questions.length) * 100)
+        : 0
+
+    const createdAttempt = await prisma.$transaction(async (tx) => {
+      const attempt = await tx.examAttempt.create({
+        data: {
+          userId: req.user.id,
+          examId,
+          objectiveScore,
+          subjectiveScore,
+          totalScore,
+          accuracyRate,
+          submitType,
+          usedTime: Number(usedTime || 0),
+          pauseCount: Number(pauseCount || 0),
+        },
+      })
+
+      for (const answer of userAnswerData) {
+        await tx.userAnswer.create({
+          data: {
+            attemptId: attempt.id,
+            questionId: answer.questionId,
+            answerText: answer.answerText,
+            selectedIndex: answer.selectedIndex,
+            score: answer.score,
+            isCorrect: answer.isCorrect,
+          },
+        })
+      }
+
+      const wrongQuestionData = userAnswerData
+        .filter((answer) => answer.isCorrect === false)
+        .map((answer) => {
+          const question = questions.find((item) => item.id === answer.questionId)
+
+          return {
+            userId: req.user.id,
+            examId,
+            questionId: answer.questionId,
+            attemptId: attempt.id,
+            questionType: question?.type || 'CHOICE',
+            knowledgePoint: question?.knowledgePoint || '未分类',
+            reason: '考试作答错误',
+            note: '',
+          }
+        })
+
+      for (const wrongQuestion of wrongQuestionData) {
+        await tx.wrongQuestion.create({
+          data: wrongQuestion,
+        })
+      }
+
+      return attempt
+    })
+
+    res.status(201).json({
+      message: '考试提交成功',
+      data: {
+        attempt: createdAttempt,
+        summary: {
+          examTotalScore: realExamTotalScore,
+          totalQuestions: questions.length,
+          answeredCount,
+          correctCount,
+          objectiveScore,
+          subjectiveScore,
+          totalScore,
+          scoreRate:
+            realExamTotalScore > 0
+              ? Math.round((totalScore / realExamTotalScore) * 100)
+              : 0,
+          accuracyRate,
+        },
+      },
+    })
+  } catch (error) {
+    console.error('Submit attempt error:', error)
+
+    res.status(500).json({
+      message: '考试提交失败',
+      error: error.message,
+    })
+  }
+})
+
+router.get('/attempts/history', requireAuth, async (req, res) => {
+  try {
+    const attempts = await prisma.examAttempt.findMany({
+      where: {
+        userId: req.user.id,
+      },
+      orderBy: {
+        submittedAt: 'desc',
+      },
+      include: {
+        exam: {
+          select: {
+            id: true,
+            title: true,
+            gradeLevel: true,
+            totalScore: true,
+          },
+        },
+        userAnswers: {
+          include: {
+            question: {
+              select: {
+                score: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const formattedAttempts = attempts.map((attempt) => {
+      const realExamTotalScore = attempt.userAnswers.reduce((sum, answer) => {
+        return sum + Number(answer.question?.score || 0)
+      }, 0)
+
+      return {
+        id: attempt.id,
+        examId: attempt.examId,
+        examTitle: attempt.exam?.title || '未知试卷',
+        examGradeLevel: attempt.exam?.gradeLevel || '',
+        examTotalScore: realExamTotalScore || attempt.exam?.totalScore || 0,
+        objectiveScore: attempt.objectiveScore,
+        subjectiveScore: attempt.subjectiveScore,
+        totalScore: attempt.totalScore,
+        accuracyRate: attempt.accuracyRate,
+        submitType: attempt.submitType,
+        usedTime: attempt.usedTime,
+        pauseCount: attempt.pauseCount,
+        answerCount: attempt.userAnswers.length,
+        submittedAt: attempt.submittedAt,
+      }
+    })
 
     res.json({
-      message: 'History loaded successfully',
+      message: '考试历史获取成功',
       data: formattedAttempts,
     })
   } catch (error) {
     console.error(error)
 
     res.status(500).json({
-      message: 'Failed to load attempt history',
+      message: '考试历史获取失败',
       error: error.message,
     })
   }
 })
 
-router.post('/wrong-questions', optionalAuth, async (req, res) => {
+router.post('/wrong-questions', requireAuth, async (req, res) => {
   try {
-    const {
-      userId,
-      examId,
-      attemptId,
-      questions,
-    } = req.body
+    const { wrongQuestions } = req.body
 
-    if (!examId) {
+    if (!Array.isArray(wrongQuestions) || wrongQuestions.length === 0) {
       return res.status(400).json({
-        message: 'examId is required',
+        message: '请提供需要保存的错题',
       })
     }
 
-    if (!Array.isArray(questions)) {
-      return res.status(400).json({
-        message: 'questions must be an array',
-      })
-    }
+    const data = wrongQuestions.map((item) => ({
+      userId: req.user.id,
+      examId: item.examId,
+      questionId: item.questionId,
+      attemptId: item.attemptId || null,
+      questionType: item.questionType || item.type || 'CHOICE',
+      knowledgePoint: item.knowledgePoint || '未分类',
+      reason: item.reason || '考试作答错误',
+      note: item.note || '',
+    }))
 
-    let finalUserId = req.user?.id || userId
-
-    if (!finalUserId) {
-      const guestUser = await prisma.user.upsert({
-        where: {
-          username: 'guest_student',
-        },
-        update: {},
-        create: {
-          username: 'guest_student',
-          passwordHash: 'temporary_guest_password_hash',
-          nickname: '游客学生',
-          role: 'STUDENT',
-          gradeLevel: 'JUNIOR',
-        },
-      })
-
-      finalUserId = guestUser.id
-    }
-
-    const createdWrongQuestions = []
-
-    for (const question of questions) {
-      const createdItem = await prisma.wrongQuestion.create({
-        data: {
-          userId: finalUserId,
-          examId,
-          questionId: question.questionId,
-          attemptId: attemptId || null,
-          questionType: String(question.questionType).toUpperCase(),
-          knowledgePoint: question.knowledgePoint || '未分类',
-          reason: question.reason || '用户保存',
-          note: question.note || null,
-        },
-      })
-
-      createdWrongQuestions.push(createdItem)
-    }
+    const created = await prisma.wrongQuestion.createMany({
+      data,
+      skipDuplicates: false,
+    })
 
     res.status(201).json({
-      message: 'Wrong questions saved successfully',
-      data: createdWrongQuestions,
+      message: '错题保存成功',
+      data: created,
     })
   } catch (error) {
     console.error(error)
 
     res.status(500).json({
-      message: 'Failed to save wrong questions',
+      message: '错题保存失败',
       error: error.message,
     })
   }
 })
 
-router.get('/wrong-questions', optionalAuth, async (req, res) => {
+router.get('/wrong-questions', requireAuth, async (req, res) => {
   try {
-    let targetUser = req.user
-  if (!targetUser) {
-    targetUser = await prisma.user.findUnique({
-    where: {
-      username: 'guest_student',
-    },
-    })
-  }
-
-  if (!targetUser) {
-     return res.json({
-      message: 'Wrong questions loaded successfully',
-      data: [],
-     })
-   }
-
-   const wrongQuestions = await prisma.wrongQuestion.findMany({
+    const wrongQuestions = await prisma.wrongQuestion.findMany({
       where: {
-       userId: targetUser.id,
+        userId: req.user.id,
       },
       orderBy: {
         createdAt: 'desc',
       },
       include: {
-        exam: true,
-        question: true,
+        exam: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        question: {
+          select: {
+            id: true,
+            text: true,
+            type: true,
+            referenceAnswer: true,
+            explanation: true,
+            knowledgePoint: true,
+          },
+        },
       },
     })
 
     const formattedWrongQuestions = wrongQuestions.map((item) => ({
       id: item.id,
       examId: item.examId,
-      examTitle: item.exam.title,
+      examTitle: item.exam?.title || '未知试卷',
       questionId: item.questionId,
-      questionText: item.question.text,
-      questionType: item.questionType,
-      knowledgePoint: item.knowledgePoint,
+      questionText: item.question?.text || '',
+      questionType: item.questionType || item.question?.type || '',
+      knowledgePoint: item.knowledgePoint || item.question?.knowledgePoint || '未分类',
+      referenceAnswer: item.question?.referenceAnswer || '',
+      explanation: item.question?.explanation || '',
       reason: item.reason,
       note: item.note,
-      score: item.question.score,
-      referenceAnswer: item.question.referenceAnswer,
-      explanation: item.question.explanation,
       createdAt: item.createdAt,
     }))
 
     res.json({
-      message: 'Wrong questions loaded successfully',
+      message: '错题本获取成功',
       data: formattedWrongQuestions,
     })
   } catch (error) {
     console.error(error)
 
     res.status(500).json({
-      message: 'Failed to load wrong questions',
+      message: '错题本获取失败',
       error: error.message,
     })
   }
 })
 
 module.exports = router
-
-router.post('/attempts/submit', optionalAuth, async (req, res) => {
-  try {
-    const {
-      userId,
-      examId,
-      objectiveScore,
-      subjectiveScore,
-      totalScore,
-      accuracyRate,
-      submitType,
-      usedTime,
-      pauseCount,
-      totalPausedDuration,
-      startedAt,
-      submittedAt,
-      answers,
-    } = req.body
-
-    if (!examId) {
-      return res.status(400).json({
-        message: 'examId is required',
-      })
-    }
-
-    if (!Array.isArray(answers)) {
-      return res.status(400).json({
-        message: 'answers must be an array',
-      })
-    }
-
-    let finalUserId = req.user?.id || userId
-
-    if (!finalUserId) {
-     const guestUser = await prisma.user.upsert({
-        where: {
-          username: 'guest_student',
-        },
-        update: {},
-        create: {
-          username: 'guest_student',
-          passwordHash: 'temporary_guest_password_hash',
-          nickname: '游客学生',
-          role: 'STUDENT',
-          gradeLevel: 'JUNIOR',
-        },
-     })
-
-     finalUserId = guestUser.id
-    }
-
-    const attempt = await prisma.examAttempt.create({
-      data: {
-        userId: finalUserId,
-        examId,
-        objectiveScore: Number(objectiveScore || 0),
-        subjectiveScore: Number(subjectiveScore || 0),
-        totalScore: Number(totalScore || 0),
-        accuracyRate: Number(accuracyRate || 0),
-        submitType: submitType === 'auto' ? 'AUTO' : 'MANUAL',
-        usedTime: Number(usedTime || 0),
-        pauseCount: Number(pauseCount || 0),
-        totalPausedDuration: Number(totalPausedDuration || 0),
-        startedAt: startedAt ? new Date(startedAt) : null,
-        submittedAt: submittedAt ? new Date(submittedAt) : new Date(),
-        userAnswers: {
-          create: answers.map((answer) => ({
-            questionId: answer.questionId,
-            answerText: answer.answerText ?? null,
-            selectedIndex:
-              answer.selectedIndex === undefined || answer.selectedIndex === null
-                ? null
-                : Number(answer.selectedIndex),
-            score: Number(answer.score || 0),
-            isCorrect:
-              answer.isCorrect === undefined || answer.isCorrect === null
-                ? null
-                : Boolean(answer.isCorrect),
-          })),
-        },
-      },
-      include: {
-        userAnswers: true,
-      },
-    })
-
-    res.status(201).json({
-      message: 'Attempt submitted successfully',
-      data: attempt,
-    })
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to submit attempt',
-      error: error.message,
-    })
-  }
-})
