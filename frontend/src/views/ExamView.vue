@@ -8,8 +8,6 @@ import {
   saveWrongQuestions,
 } from '../api/examApi'
 import { getSavedUser } from '../api/authApi'
-import { mockExams } from '../data/mockExams'
-import { mockQuestions } from '../data/mockQuestions'
 
 
 const route = useRoute()
@@ -44,17 +42,11 @@ const submittedAt = ref(null)
 const examId = computed(() => route.params.examId)
 
 const currentExam = computed(() => {
-  if (examData.value) {
-    return examData.value
-  }
-  return mockExams.find((exam) => exam.id === examId.value)
+  return examData.value
 })
 
 const currentQuestions = computed(() => {
-  if (questionsData.value.length > 0) {
-    return questionsData.value
-  }
-  return mockQuestions.filter((question) => question.examId === examId.value)
+  return questionsData.value
 })
 
 const currentQuestion = computed(() => {
@@ -103,7 +95,7 @@ const objectiveScore = computed(() => {
 const correctChoiceCount = computed(() => {
   return choiceQuestions.value.filter((question) => {
     const userAnswer = userAnswers.value[question.id]
-    return userAnswer === question.answer
+    return Number(userAnswer) === Number(question.answer)
   }).length
 })
 
@@ -366,7 +358,7 @@ const loadExamFromApi = async () => {
     questionsData.value = questionsResult.map(normalizeQuestionFromApi)
   } catch (error) {
     console.error(error)
-    examErrorMessage.value = '后端考试数据暂时不可用，当前显示本地 mock 数据。'
+    examErrorMessage.value = '后端考试数据暂时不可用，请检查后端服务或刷新页面重试。'
     examData.value = null
     questionsData.value = []
   } finally {
@@ -702,7 +694,7 @@ const saveExamHistoryToLocal = () => {
     id: `${examId.value}-${Date.now()}`,
     examId: examId.value,
     examTitle: currentExam.value.title,
-    totalScore: currentExam.value.totalScore,
+    totalScore: realExamTotalScore.value || currentExam.value.totalScore,
     earnedScore: totalScore.value,
     accuracyRate: accuracyRate.value,
     objectiveScore: objectiveScore.value,
@@ -760,7 +752,7 @@ onBeforeUnmount(() => {
       <div class="exam-info-grid">
         <div class="exam-info-item">
           <span class="info-label">题目数量</span>
-          <strong>{{ currentExam.questionCount }} 题</strong>
+          <strong>{{ currentQuestions.length }} 题</strong>
         </div>
 
         <div class="exam-info-item">
