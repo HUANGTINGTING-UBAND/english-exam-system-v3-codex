@@ -1774,3 +1774,9 @@ h1 {
   color: #4b5563;
   line-height: 1.7;
 }
+.wrong-question-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}

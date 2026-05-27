@@ -101,4 +101,41 @@ router.get('/wrong-questions/:wrongQuestionId/practice', requireAuth, async (req
   }
 })
 
+router.delete('/wrong-questions/:wrongQuestionId', requireAuth, async (req, res) => {
+  try {
+    const { wrongQuestionId } = req.params
+
+    const wrongQuestion = await prisma.wrongQuestion.findFirst({
+      where: {
+        id: wrongQuestionId,
+        userId: req.user.id,
+      },
+    })
+
+    if (!wrongQuestion) {
+      return res.status(404).json({
+        message: '错题不存在或无权访问',
+      })
+    }
+
+    await prisma.wrongQuestion.delete({
+      where: {
+        id: wrongQuestionId,
+      },
+    })
+
+    res.json({
+      message: '错题已标记为掌握',
+      data: wrongQuestion,
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: '标记错题已掌握失败',
+      error: error.message,
+    })
+  }
+})
+
 module.exports = router

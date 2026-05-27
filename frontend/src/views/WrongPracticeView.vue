@@ -1,13 +1,19 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
-import { getWrongQuestionPractice } from '../api/examApi'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import {
+  getWrongQuestionPractice,
+  markWrongQuestionMastered,
+} from '../api/examApi'
 
 const route = useRoute()
+const router = useRouter()
 
 const detail = ref(null)
 const isLoading = ref(false)
+const isMarkingMastered = ref(false)
 const errorMessage = ref('')
+const successMessage = ref('')
 const userChoice = ref(null)
 const userTextAnswer = ref('')
 const hasSubmitted = ref(false)
@@ -80,6 +86,43 @@ const resetPractice = () => {
   userTextAnswer.value = ''
   hasSubmitted.value = false
   isCorrect.value = false
+  successMessage.value = ''
+}
+
+const handleMarkMastered = async () => {
+  const wrongQuestionId = route.params.wrongQuestionId
+
+  if (!wrongQuestionId) {
+    errorMessage.value = '缺少错题 ID'
+    return
+  }
+
+  const confirmed = window.confirm(
+    '确认将这道错题标记为已掌握吗？标记后它会从错题本中移除。'
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  isMarkingMastered.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await markWrongQuestionMastered(wrongQuestionId)
+
+    successMessage.value = '已标记为掌握，即将返回个人中心。'
+
+    setTimeout(() => {
+      router.push('/profile')
+    }, 800)
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '标记已掌握失败'
+  } finally {
+    isMarkingMastered.value = false
+  }
 }
 
 onMounted(() => {
@@ -105,6 +148,10 @@ onMounted(() => {
       <RouterLink class="secondary-btn" to="/exams">
         返回试卷列表
       </RouterLink>
+    </div>
+
+    <div v-if="successMessage" class="api-success">
+      {{ successMessage }}
     </div>
 
     <div v-if="isLoading" class="loading-box">
@@ -173,6 +220,14 @@ onMounted(() => {
             @click="resetPractice"
           >
             再练一次
+          </button>
+
+          <button
+            class="secondary-btn"
+            :disabled="isMarkingMastered"
+            @click="handleMarkMastered"
+          >
+            {{ isMarkingMastered ? '处理中……' : '标记已掌握' }}
           </button>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { getSavedUser, logoutUser } from '../api/authApi'
 import {
   getAttemptHistory,
   getWrongQuestions,
+  markWrongQuestionMastered,
 } from '../api/examApi'
 
 const currentUser = ref(getSavedUser())
@@ -14,6 +15,7 @@ const isLoadingHistory = ref(false)
 const isLoadingWrongQuestions = ref(false)
 const historyErrorMessage = ref('')
 const wrongQuestionErrorMessage = ref('')
+const successMessage = ref('')
 
 const isLoggedIn = computed(() => {
   return Boolean(currentUser.value)
@@ -90,6 +92,32 @@ const loadWrongQuestions = async () => {
   }
 }
 
+const handleMarkMastered = async (item) => {
+  const confirmed = window.confirm(
+    `确认将这道错题标记为已掌握吗？\n\n标记后它会从错题本中移除。`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  wrongQuestionErrorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await markWrongQuestionMastered(item.id)
+
+    wrongQuestions.value = wrongQuestions.value.filter(
+      (wrongQuestion) => wrongQuestion.id !== item.id
+    )
+
+    successMessage.value = '已标记为掌握，错题已从错题本移除。'
+  } catch (error) {
+    console.error(error)
+    wrongQuestionErrorMessage.value = error.message || '标记已掌握失败'
+  }
+}
+
 onMounted(() => {
   loadAttemptHistory()
   loadWrongQuestions()
@@ -152,6 +180,10 @@ onMounted(() => {
             退出登录
           </button>
         </div>
+      </div>
+
+      <div v-if="successMessage" class="api-success">
+        {{ successMessage }}
       </div>
 
       <div class="profile-grid">
@@ -249,12 +281,21 @@ onMounted(() => {
                 解析：{{ item.explanation }}
               </p>
 
-              <RouterLink
-                class="primary-btn"
-                :to="`/wrong-practice/${item.id}`"
-              >
-                重新练习
-              </RouterLink>
+              <div class="wrong-question-actions">
+                <RouterLink
+                  class="primary-btn"
+                  :to="`/wrong-practice/${item.id}`"
+                >
+                  重新练习
+                </RouterLink>
+
+                <button
+                  class="secondary-btn"
+                  @click="handleMarkMastered(item)"
+                >
+                  标记已掌握
+                </button>
+              </div>
             </div>
           </div>
 
