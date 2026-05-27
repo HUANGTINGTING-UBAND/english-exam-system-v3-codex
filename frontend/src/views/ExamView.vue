@@ -5,7 +5,6 @@ import {
   getExamById,
   getQuestionsByExamId,
   submitExamAttempt,
-  saveWrongQuestions,
 } from '../api/examApi'
 import { getSavedUser } from '../api/authApi'
 
@@ -625,91 +624,6 @@ const restartExam = () => {
   saveProgress()
 }
 
-const getWrongQuestionsForCurrentAttempt = () => {
-  return currentQuestions.value.filter((question) => {
-    if (question.type === 'choice') {
-      return !isChoiceCorrect(question)
-    }
-
-    const score = Number(subjectiveScores.value[question.id] || 0)
-    return score < question.score / 2
-  })
-}
-
-const saveWrongQuestionsToLocal = async () => {
-  const wrongQuestions = getWrongQuestionsForCurrentAttempt()
-
-  if (wrongQuestions.length === 0) {
-    window.alert('本次暂无错题。')
-    return
-  }
-
-  const localWrongQuestions = wrongQuestions.map((question) => ({
-    id: `${examId.value}-${question.id}-${Date.now()}`,
-    examId: examId.value,
-    examTitle: currentExam.value.title,
-    questionId: question.id,
-    questionText: question.text,
-    type: question.type,
-    knowledgePoint: question.knowledgePoint,
-    score: question.score,
-    earnedScore: getQuestionScore(question),
-    savedAt: new Date().toISOString(),
-  }))
-
-  const oldWrongQuestions = JSON.parse(localStorage.getItem('wrongQuestions') || '[]')
-
-  localStorage.setItem(
-    'wrongQuestions',
-    JSON.stringify([...localWrongQuestions, ...oldWrongQuestions])
-  )
-
-  try {
-    await saveWrongQuestions({
-      examId: examId.value,
-      questions: wrongQuestions.map((question) => ({
-        questionId: question.id,
-        questionType: question.type,
-        knowledgePoint: question.knowledgePoint,
-        reason: '本次练习中保存',
-        note: '',
-      })),
-    })
-
-    window.alert(`已保存 ${wrongQuestions.length} 道错题到数据库。`)
-  } catch (error) {
-    console.error(error)
-    window.alert(`已保存 ${wrongQuestions.length} 道错题到本地，但保存到数据库失败。`)
-  }
-}
-
-const saveExamHistoryToLocal = () => {
-  if (!currentExam.value) {
-    return
-  }
-
-  const oldHistory = JSON.parse(localStorage.getItem('examHistory') || '[]')
-
-  const historyItem = {
-    id: `${examId.value}-${Date.now()}`,
-    examId: examId.value,
-    examTitle: currentExam.value.title,
-    totalScore: realExamTotalScore.value || currentExam.value.totalScore,
-    earnedScore: totalScore.value,
-    accuracyRate: accuracyRate.value,
-    objectiveScore: objectiveScore.value,
-    subjectiveScore: subjectiveScore.value,
-    submitType: submitTypeText.value,
-    usedTime: elapsedSeconds.value,
-    pauseCount: pauseCount.value,
-    totalPausedDuration: totalPausedDuration.value,
-    createdAt: new Date().toISOString(),
-  }
-
-  localStorage.setItem('examHistory', JSON.stringify([historyItem, ...oldHistory]))
-  window.alert('本次考试结果已保存到本地历史记录。')
-}
-
 watch(
   [
     userAnswers,
@@ -981,21 +895,17 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="result-actions">
-            <button class="primary-btn" @click="restartExam">
-              重新考试
-            </button>
+           <button class="primary-btn" @click="restartExam">
+             重新考试
+           </button>
 
-            <button class="secondary-btn" @click="saveExamHistoryToLocal">
-              保存结果
-            </button>
+           <RouterLink class="secondary-btn" to="/profile">
+             查看个人中心
+           </RouterLink>
 
-            <button class="secondary-btn" @click="saveWrongQuestionsToLocal">
-              保存错题
-            </button>
-
-            <RouterLink class="secondary-btn" to="/exams">
-              返回试卷列表
-            </RouterLink>
+           <RouterLink class="secondary-btn" to="/exams">
+             返回试卷列表
+           </RouterLink>
           </div>
         </div>
 
