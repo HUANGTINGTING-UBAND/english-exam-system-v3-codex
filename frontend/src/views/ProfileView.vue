@@ -27,13 +27,6 @@ const roleNameMap = {
   ADMIN: '管理员',
 }
 
-const gradeNameMap = {
-  PRIMARY: '小学',
-  JUNIOR: '初中',
-  SENIOR: '高中',
-  COLLEGE: '大学',
-}
-
 const totalAttempts = computed(() => {
   return attemptHistory.value.length
 })
@@ -293,9 +286,6 @@ onMounted(() => {
           </p>
           <p>
             角色：{{ roleNameMap[currentUser.role] || currentUser.role }}
-          </p>
-          <p>
-            学段：{{ gradeNameMap[currentUser.gradeLevel] || currentUser.gradeLevel }}
           </p>
         </div>
 
