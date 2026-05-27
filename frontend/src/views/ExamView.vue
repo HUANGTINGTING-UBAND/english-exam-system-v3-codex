@@ -402,9 +402,18 @@ const startExam = () => {
   currentUser.value = getSavedUser()
 
   if (!currentUser.value) {
-    showLoginTip.value = true
+    const confirmed = window.confirm(
+      '你需要先登录才能开始考试，这样系统才能保存考试记录和错题。是否现在去登录？'
+    )
+
+    if (confirmed) {
+      router.push('/login')
+    }
+
+    return
   }
 
+  showLoginTip.value = false
   isStarted.value = true
   isPaused.value = false
   isSubmitted.value = false
@@ -683,7 +692,7 @@ onBeforeUnmount(() => {
       <div class="exam-notice">
         <h2>考试说明</h2>
         <ul>
-          <li>点击“开始考试”后，系统将进入正式答题页面。</li>
+          <li>点击“开始考试”前，请先登录账号，系统会保存你的考试记录和错题。</li>
           <li>考试过程中可暂停，暂停时不允许继续答题。</li>
           <li>系统会暂存在本地保存答题进度，刷新后可选择继续考试。</li>
         </ul>
