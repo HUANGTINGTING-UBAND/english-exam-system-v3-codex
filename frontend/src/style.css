@@ -1909,3 +1909,9 @@ h1 {
   gap: 12px;
   flex-wrap: wrap;
 }
+.form-tip {
+  margin: 4px 0 12px;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.6;
+}

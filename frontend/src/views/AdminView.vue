@@ -50,7 +50,7 @@ const form = ref({
   gradeLevel: 'JUNIOR',
   description: '',
   timeLimit: 3600,
-  totalScore: 100,
+  totalScore: 0,
   isPublished: true,
 })
 
@@ -59,7 +59,7 @@ const editExamForm = ref({
   gradeLevel: 'JUNIOR',
   description: '',
   timeLimit: 3600,
-  totalScore: 100,
+  totalScore: 0,
   isPublished: true,
 })
 
@@ -234,7 +234,7 @@ const resetForm = () => {
     gradeLevel: 'JUNIOR',
     description: '',
     timeLimit: 3600,
-    totalScore: 100,
+    totalScore: 0,
     isPublished: true,
   }
 }
@@ -254,7 +254,7 @@ const handleCreateExam = async () => {
       gradeLevel: form.value.gradeLevel,
       description: form.value.description.trim(),
       timeLimit: Number(form.value.timeLimit),
-      totalScore: Number(form.value.totalScore),
+      totalScore: 0,
       isPublished: Boolean(form.value.isPublished),
     })
 
@@ -289,7 +289,7 @@ const closeEditExam = () => {
     gradeLevel: 'JUNIOR',
     description: '',
     timeLimit: 3600,
-    totalScore: 100,
+    totalScore: 0,
     isPublished: true,
   }
 }
@@ -718,14 +718,9 @@ onMounted(() => {
             />
           </label>
 
-          <label>
-            试卷满分
-            <input
-              v-model="form.totalScore"
-              type="number"
-              min="1"
-            />
-          </label>
+          <p class="form-tip">
+           试卷满分将根据题目分值自动统计，无需手动填写。
+          </p>
 
           <label class="checkbox-label">
             <input
@@ -891,10 +886,9 @@ onMounted(() => {
                     <input v-model="editExamForm.timeLimit" type="number" min="60" />
                   </label>
 
-                  <label>
-                    试卷满分
-                    <input v-model="editExamForm.totalScore" type="number" min="1" />
-                  </label>
+                  <p class="form-tip">
+                   试卷满分将根据题目分值自动统计，无需手动填写。
+                  </p>
 
                   <label class="checkbox-label">
                     <input v-model="editExamForm.isPublished" type="checkbox" />
