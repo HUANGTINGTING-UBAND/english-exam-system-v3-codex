@@ -276,7 +276,7 @@ const openEditExam = (exam) => {
     gradeLevel: exam.gradeLevel || 'JUNIOR',
     description: exam.description || '',
     timeLimit: exam.timeLimit || 3600,
-    totalScore: exam.totalScore || 100,
+    totalScore: exam.totalScore || 0,
     isPublished: Boolean(exam.isPublished),
   }
 }
@@ -582,11 +582,13 @@ const handleUpdateQuestion = async () => {
       orderIndex: Number(editQuestionForm.value.orderIndex || 1),
     })
 
-    successMessage.value = '题目更新成功'
+    successMessage.value = '题目更新成功，试卷满分已自动刷新'
     closeEditQuestion()
 
+    await loadAdminExams()
+
     if (selectedQuestionExamId.value) {
-      await handleLoadQuestionsByExamId(selectedQuestionExamId.value)
+     await handleLoadQuestionsByExamId(selectedQuestionExamId.value)
     }
   } catch (error) {
     console.error(error)
