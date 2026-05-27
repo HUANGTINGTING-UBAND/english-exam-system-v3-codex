@@ -248,6 +248,13 @@ onMounted(() => {
               <p v-if="item.explanation">
                 解析：{{ item.explanation }}
               </p>
+
+              <RouterLink
+                class="primary-btn"
+                :to="`/wrong-practice/${item.id}`"
+              >
+                重新练习
+              </RouterLink>
             </div>
           </div>
 

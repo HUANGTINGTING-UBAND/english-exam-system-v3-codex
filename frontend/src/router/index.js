@@ -7,6 +7,7 @@ import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import AdminView from '../views/AdminView.vue'
 import AttemptDetailView from '../views/AttemptDetailView.vue'
+import WrongPracticeView from '../views/WrongPracticeView.vue'
 
 const routes = [
   {
@@ -33,6 +34,11 @@ const routes = [
     path: '/attempts/:attemptId',
     name: 'attempt-detail',
     component: AttemptDetailView,
+  },
+  {
+    path: '/wrong-practice/:wrongQuestionId',
+    name: 'wrong-practice',
+    component: WrongPracticeView,
   },
   {
     path: '/login',

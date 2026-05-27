@@ -106,6 +106,16 @@ export const getWrongQuestions = async () => {
   return parseResponse(response, '获取错题本失败')
 }
 
+export const getWrongQuestionPractice = async (wrongQuestionId) => {
+  const response = await fetch(`${API_BASE_URL}/wrong-questions/${wrongQuestionId}/practice`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '获取错题练习详情失败')
+}
+
 export const getAdminExams = async () => {
   const response = await fetch(`${API_BASE_URL}/admin/exams`, {
     headers: {

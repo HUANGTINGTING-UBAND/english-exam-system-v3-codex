@@ -7,6 +7,7 @@ const authRoutes = require('./src/routes/authRoutes')
 const adminRoutes = require('./src/routes/adminRoutes')
 const adminImportRoutes = require('./src/routes/adminImportRoutes')
 const resultRoutes = require('./src/routes/resultRoutes')
+const wrongPracticeRoutes = require('./src/routes/wrongPracticeRoutes')
 
 const app = express()
 
@@ -50,6 +51,7 @@ app.get('/', (req, res) => {
       adminExams: '/api/admin/exams',
       importFile: '/api/admin/import/parse-file',
       attemptDetail: '/api/attempts/:attemptId/detail',
+      wrongPractice: '/api/wrong-questions/:wrongQuestionId/practice',
     },
   })
 })
@@ -67,6 +69,7 @@ app.use('/api', authRoutes)
 app.use('/api', adminRoutes)
 app.use('/api', adminImportRoutes)
 app.use('/api', resultRoutes)
+app.use('/api', wrongPracticeRoutes)
 
 app.use((req, res) => {
   res.status(404).json({

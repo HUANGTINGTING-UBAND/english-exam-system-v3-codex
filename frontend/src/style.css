@@ -1685,3 +1685,92 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+.wrong-practice-section {
+  max-width: 980px;
+  margin: 0 auto 64px;
+  padding: 0 24px;
+}
+
+.wrong-practice-card,
+.wrong-practice-result-card {
+  padding: 28px;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  margin-bottom: 24px;
+}
+
+.wrong-practice-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.wrong-practice-meta span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wrong-practice-card h2,
+.wrong-practice-result-card h2 {
+  margin-top: 0;
+  line-height: 1.7;
+}
+
+.wrong-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.wrong-choice-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  cursor: pointer;
+}
+
+.wrong-choice-option.selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.wrong-text-answer label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #374151;
+  font-weight: 700;
+  margin-top: 18px;
+}
+
+.wrong-text-answer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 14px;
+  padding: 12px;
+  font: inherit;
+}
+
+.wrong-practice-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.wrong-practice-result-card p {
+  color: #4b5563;
+  line-height: 1.7;
+}
