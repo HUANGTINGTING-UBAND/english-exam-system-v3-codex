@@ -39,10 +39,9 @@ const filteredAttempts = computed(() => {
 
     const matchedGrade =
       gradeFilter.value === 'ALL' ||
-      attempt.examGradeLevel === gradeFilter.value ||
-      attempt.userGradeLevel === gradeFilter.value
+      attempt.examGradeLevel === gradeFilter.value
 
-    return matchedStudent && matchedExam && matchedGrade
+return matchedStudent && matchedExam && matchedGrade
   })
 })
 
@@ -112,6 +111,76 @@ const clearFilters = () => {
   gradeFilter.value = 'ALL'
 }
 
+const escapeCsvValue = (value) => {
+  const text = String(value ?? '')
+
+  if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+    return `"${text.replaceAll('"', '""')}"`
+  }
+
+  return text
+}
+
+const exportFilteredAttemptsToCsv = () => {
+  if (filteredAttempts.value.length === 0) {
+    window.alert('当前没有可导出的考试记录。')
+    return
+  }
+
+  const headers = [
+    '学生昵称',
+    '用户名',
+    '学生学段',
+    '试卷标题',
+    '试卷学段',
+    '得分',
+    '满分',
+    '得分率',
+    '正确率',
+    '客观题得分',
+    '主观题得分',
+    '用时',
+    '提交时间',
+  ]
+
+  const rows = filteredAttempts.value.map((attempt) => [
+    attempt.nickname || '',
+    attempt.username || '',
+    gradeNameMap[attempt.userGradeLevel] || attempt.userGradeLevel || '',
+    attempt.examTitle || '',
+    gradeNameMap[attempt.examGradeLevel] || attempt.examGradeLevel || '',
+    attempt.totalScore ?? '',
+    attempt.examTotalScore ?? '',
+    `${attempt.scoreRate ?? 0}%`,
+    `${attempt.accuracyRate ?? 0}%`,
+    attempt.objectiveScore ?? '',
+    attempt.subjectiveScore ?? '',
+    formatUsedTime(attempt.usedTime),
+    formatDateTime(attempt.submittedAt),
+  ])
+
+  const csvContent = [
+    headers,
+    ...rows,
+  ]
+    .map((row) => row.map(escapeCsvValue).join(','))
+    .join('\n')
+
+  const blob = new Blob([`\uFEFF${csvContent}`], {
+    type: 'text/csv;charset=utf-8;',
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const timestamp = new Date().toISOString().slice(0, 19).replaceAll(':', '-')
+
+  link.href = url
+  link.download = `学生考试记录-${timestamp}.csv`
+  link.click()
+
+  URL.revokeObjectURL(url)
+}
+
 const loadAdminAttempts = async () => {
   if (!isAdmin.value) {
     errorMessage.value = '只有管理员可以查看学生考试记录'
@@ -158,6 +227,11 @@ onMounted(() => {
       <button class="secondary-btn" @click="loadAdminAttempts">
         刷新记录
       </button>
+
+      <button class="secondary-btn" @click="exportFilteredAttemptsToCsv">
+        导出 CSV
+      </button>
+
     </div>
 
     <section v-if="!isAdmin" class="api-warning">
@@ -217,6 +291,11 @@ onMounted(() => {
           >
             清空筛选
           </button>
+
+          <button class="secondary-btn" @click="exportFilteredAttemptsToCsv">
+            导出当前筛选结果
+          </button>
+
         </div>
       </div>
 
@@ -265,7 +344,6 @@ onMounted(() => {
               <td>
                 <strong>{{ attempt.nickname || attempt.username }}</strong>
                 <p>{{ attempt.username }}</p>
-                <p>{{ gradeNameMap[attempt.userGradeLevel] || attempt.userGradeLevel || '未知学段' }}</p>
               </td>
 
               <td>

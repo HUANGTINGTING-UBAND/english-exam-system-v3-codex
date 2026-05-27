@@ -32,7 +32,7 @@ const formatUser = (user) => {
 
 router.post('/auth/register', async (req, res) => {
   try {
-    const { username, password, nickname, gradeLevel } = req.body
+    const { username, password, nickname } = req.body
 
     if (!username || !password) {
       return res.status(400).json({
@@ -66,7 +66,7 @@ router.post('/auth/register', async (req, res) => {
         passwordHash,
         nickname: nickname || username,
         role: 'STUDENT',
-        gradeLevel: gradeLevel ? String(gradeLevel).toUpperCase() : null,
+        gradeLevel: 'PRIMARY',
       },
     })
 
@@ -80,7 +80,7 @@ router.post('/auth/register', async (req, res) => {
       },
     })
   } catch (error) {
-    console.error(error)
+    console.error('Register error:', error)
 
     res.status(500).json({
       message: '注册失败',
@@ -129,7 +129,7 @@ router.post('/auth/login', async (req, res) => {
       },
     })
   } catch (error) {
-    console.error(error)
+    console.error('Login error:', error)
 
     res.status(500).json({
       message: '登录失败',
@@ -168,7 +168,7 @@ router.get('/auth/me', async (req, res) => {
       data: formatUser(user),
     })
   } catch (error) {
-    console.error(error)
+    console.error('Auth me error:', error)
 
     res.status(401).json({
       message: '登录状态无效或已过期',

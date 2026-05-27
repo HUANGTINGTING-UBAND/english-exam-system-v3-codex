@@ -8,7 +8,6 @@ const router = useRouter()
 const username = ref('')
 const nickname = ref('')
 const password = ref('')
-const gradeLevel = ref('JUNIOR')
 const isLoading = ref(false)
 const errorMessage = ref('')
 
@@ -32,7 +31,6 @@ const handleRegister = async () => {
       username: username.value,
       nickname: nickname.value || username.value,
       password: password.value,
-      gradeLevel: gradeLevel.value,
     })
 
     saveAuthData(authData)
@@ -85,16 +83,6 @@ const handleRegister = async () => {
           type="password"
           placeholder="请输入至少 6 位密码"
         />
-      </label>
-
-      <label>
-        学段
-        <select v-model="gradeLevel">
-          <option value="PRIMARY">小学</option>
-          <option value="JUNIOR">初中</option>
-          <option value="SENIOR">高中</option>
-          <option value="COLLEGE">大学</option>
-        </select>
       </label>
 
       <button
