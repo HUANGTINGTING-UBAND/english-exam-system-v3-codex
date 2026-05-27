@@ -31,7 +31,13 @@ const wrongCount = computed(() => {
 })
 
 const fullScore = computed(() => {
-  return Number(detail.value?.exam?.totalScore || 0)
+  const answers = detail.value?.answers || []
+
+  const realTotalScore = answers.reduce((sum, item) => {
+    return sum + Number(item.score || 0)
+  }, 0)
+
+  return realTotalScore || Number(detail.value?.exam?.totalScore || 0)
 })
 
 const actualScore = computed(() => {
@@ -45,6 +51,7 @@ const scoreRate = computed(() => {
 
   return Math.round((actualScore.value / fullScore.value) * 100)
 })
+
 
 const formatDateTime = (dateValue) => {
   if (!dateValue) {

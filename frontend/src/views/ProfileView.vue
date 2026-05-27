@@ -43,7 +43,7 @@ const totalWrongQuestions = computed(() => {
 })
 
 const getAttemptFullScore = (attempt) => {
-  return Number(attempt.examTotalScore || attempt.fullScore || 0)
+  return Number(attempt.examTotalScore || attempt.realTotalScore || attempt.fullScore || 0)
 }
 
 const getAttemptScore = (attempt) => {

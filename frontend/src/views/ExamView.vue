@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import {
   getExamById,
   getQuestionsByExamId,
@@ -11,7 +11,9 @@ import { getSavedUser } from '../api/authApi'
 import { mockExams } from '../data/mockExams'
 import { mockQuestions } from '../data/mockQuestions'
 
+
 const route = useRoute()
+const router = useRouter()
 
 const isStarted = ref(false)
 const isPaused = ref(false)
@@ -90,8 +92,8 @@ const objectiveScore = computed(() => {
   return choiceQuestions.value.reduce((total, question) => {
     const userAnswer = userAnswers.value[question.id]
 
-    if (userAnswer === question.answer) {
-      return total + question.score
+    if (Number(userAnswer) === Number(question.answer)) {
+      return total + Number(question.score || 0)
     }
 
     return total
@@ -115,13 +117,18 @@ const subjectiveScore = computed(() => {
 const totalScore = computed(() => {
   return objectiveScore.value + subjectiveScore.value
 })
+const realExamTotalScore = computed(() => {
+  return currentQuestions.value.reduce((total, question) => {
+    return total + Number(question.score || 0)
+  }, 0)
+})
 
 const accuracyRate = computed(() => {
-  if (!currentExam.value || currentExam.value.totalScore === 0) {
+  if (choiceQuestions.value.length === 0) {
     return 0
   }
 
-  return Math.round((totalScore.value / currentExam.value.totalScore) * 100)
+  return Math.round((correctChoiceCount.value / choiceQuestions.value.length) * 100)
 })
 
 const elapsedSeconds = computed(() => {
@@ -565,13 +572,22 @@ const finalizeSubmit = async (type) => {
   clearProgress()
 
   try {
-    await submitExamAttempt(buildAttemptPayload(type))
+    const result = await submitExamAttempt(buildAttemptPayload(type))
+
+    const attemptId = result?.attempt?.id || result?.id
+
+    if (attemptId) {
+      router.push(`/attempts/${attemptId}`)
+      return
+    }
+
     window.alert('考试结果已保存到数据库。')
   } catch (error) {
     console.error(error)
     window.alert('考试已在前端提交，但保存到数据库失败。请检查后端服务。')
   }
 }
+
 
 const submitExam = async () => {
   if (unansweredCount.value > 0) {
@@ -749,7 +765,7 @@ onBeforeUnmount(() => {
 
         <div class="exam-info-item">
           <span class="info-label">试卷满分</span>
-          <strong>{{ currentExam.totalScore }} 分</strong>
+          <strong>{{ realExamTotalScore || currentExam.totalScore }} 分</strong>
         </div>
 
         <div class="exam-info-item">
@@ -917,7 +933,7 @@ onBeforeUnmount(() => {
           <div class="score-summary">
             <div class="score-item score-main">
               <span>最终得分</span>
-              <strong>{{ totalScore }} / {{ currentExam.totalScore }}</strong>
+              <strong>{{ totalScore }} / {{ realExamTotalScore }}</strong>
             </div>
 
             <div class="score-item">
