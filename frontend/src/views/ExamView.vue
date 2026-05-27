@@ -15,6 +15,7 @@ const router = useRouter()
 const isStarted = ref(false)
 const isPaused = ref(false)
 const isSubmitted = ref(false)
+const isSubmitting = ref(false)
 const currentUser = ref(getSavedUser())
 const showLoginTip = ref(false)
 
@@ -373,7 +374,7 @@ const stopTimer = () => {
 }
 
 const autoSubmitExam = async () => {
-  if (isSubmitted.value) {
+  if (isSubmitted.value || isSubmitting.value) {
     return
   }
 
@@ -569,6 +570,11 @@ const buildAttemptPayload = (type) => {
 }
 
 const finalizeSubmit = async (type) => {
+  if (isSubmitting.value || isSubmitted.value) {
+    return
+  }
+
+  isSubmitting.value = true
   isSubmitted.value = true
   isPaused.value = false
   submitType.value = type
@@ -589,7 +595,13 @@ const finalizeSubmit = async (type) => {
     window.alert('考试结果已保存到数据库。')
   } catch (error) {
     console.error(error)
-    window.alert('考试已在前端提交，但保存到数据库失败。请检查后端服务。')
+
+    isSubmitted.value = false
+    startTimer()
+
+    window.alert('考试保存到数据库失败，请检查后端服务后重试。')
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -796,11 +808,12 @@ onBeforeUnmount(() => {
           </button>
 
           <button
-            v-if="!isSubmitted"
-            class="primary-btn"
-            @click="submitExam"
+           v-if="!isSubmitted"
+           class="primary-btn"
+           :disabled="isSubmitting"
+           @click="submitExam"
           >
-            提交试卷
+           {{ isSubmitting ? '提交中……' : '提交试卷' }}
           </button>
 
           <span v-else class="submitted-badge">
