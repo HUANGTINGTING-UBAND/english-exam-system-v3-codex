@@ -1849,3 +1849,55 @@ h1 {
   flex-wrap: wrap;
   align-items: center;
 }
+.admin-attempt-filter-card {
+  margin-bottom: 24px;
+  padding: 24px;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.admin-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.admin-filter-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #374151;
+  font-weight: 700;
+}
+
+.admin-filter-grid input,
+.admin-filter-grid select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: inherit;
+  background: white;
+}
+
+.admin-filter-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-filter-actions p {
+  margin: 0;
+  color: #6b7280;
+}
+
+@media (max-width: 860px) {
+  .admin-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
