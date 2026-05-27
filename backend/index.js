@@ -6,6 +6,7 @@ const examRoutes = require('./src/routes/examRoutes')
 const authRoutes = require('./src/routes/authRoutes')
 const adminRoutes = require('./src/routes/adminRoutes')
 const adminImportRoutes = require('./src/routes/adminImportRoutes')
+const resultRoutes = require('./src/routes/resultRoutes')
 
 const app = express()
 
@@ -48,6 +49,7 @@ app.get('/', (req, res) => {
       register: '/api/auth/register',
       adminExams: '/api/admin/exams',
       importFile: '/api/admin/import/parse-file',
+      attemptDetail: '/api/attempts/:attemptId/detail',
     },
   })
 })
@@ -64,6 +66,7 @@ app.use('/api', examRoutes)
 app.use('/api', authRoutes)
 app.use('/api', adminRoutes)
 app.use('/api', adminImportRoutes)
+app.use('/api', resultRoutes)
 
 app.use((req, res) => {
   res.status(404).json({

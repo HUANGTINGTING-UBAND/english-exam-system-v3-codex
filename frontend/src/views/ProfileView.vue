@@ -1,30 +1,43 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { getAttemptHistory, getWrongQuestions } from '../api/examApi'
 import { getSavedUser, logoutUser } from '../api/authApi'
+import {
+  getAttemptHistory,
+  getWrongQuestions,
+} from '../api/examApi'
 
-const examHistory = ref([])
-const wrongQuestions = ref([])
 const currentUser = ref(getSavedUser())
+const attemptHistory = ref([])
+const wrongQuestions = ref([])
+const isLoadingHistory = ref(false)
+const isLoadingWrongQuestions = ref(false)
+const historyErrorMessage = ref('')
+const wrongQuestionErrorMessage = ref('')
 
-const handleLogout = () => {
-  const confirmed = window.confirm('确认退出登录吗？')
+const isLoggedIn = computed(() => {
+  return Boolean(currentUser.value)
+})
 
-  if (!confirmed) {
-    return
-  }
-
-  logoutUser()
-  currentUser.value = null
-  window.alert('已退出登录')
+const roleNameMap = {
+  STUDENT: '学生',
+  ADMIN: '管理员',
 }
 
-const isLoadingHistory = ref(false)
-const historyErrorMessage = ref('')
+const gradeNameMap = {
+  PRIMARY: '小学',
+  JUNIOR: '初中',
+  SENIOR: '高中',
+  COLLEGE: '大学',
+}
 
-const isLoadingWrongQuestions = ref(false)
-const wrongQuestionErrorMessage = ref('')
+const formatDateTime = (dateValue) => {
+  if (!dateValue) {
+    return '暂无'
+  }
+
+  return new Date(dateValue).toLocaleString()
+}
 
 const formatUsedTime = (seconds) => {
   const totalSeconds = Number(seconds || 0)
@@ -34,61 +47,36 @@ const formatUsedTime = (seconds) => {
   return `${minutes} 分 ${restSeconds} 秒`
 }
 
-const formatSubmitType = (submitType) => {
-  if (submitType === 'AUTO') {
-    return '自动提交'
-  }
-
-  if (submitType === 'MANUAL') {
-    return '主动提交'
-  }
-
-  return submitType || '未知'
+const handleLogout = () => {
+  logoutUser()
+  currentUser.value = null
+  attemptHistory.value = []
+  wrongQuestions.value = []
 }
 
-const formatQuestionType = (type) => {
-  const typeMap = {
-    CHOICE: '单选题',
-    TRANSLATION: '翻译题',
-    ERROR_CORRECTION: '改错题',
-    WRITING: '写作题',
-    READING: '阅读理解',
-    CLOZE: '完形填空',
-    choice: '单选题',
-    translation: '翻译题',
-    error_correction: '改错题',
-    writing: '写作题',
-    reading: '阅读理解',
-    cloze: '完形填空',
+const loadAttemptHistory = async () => {
+  if (!isLoggedIn.value) {
+    return
   }
 
-  return typeMap[type] || type || '未知题型'
-}
-
-const formatDateTime = (dateValue) => {
-  if (!dateValue) {
-    return '暂无时间'
-  }
-
-  return new Date(dateValue).toLocaleString()
-}
-
-const loadHistoryFromApi = async () => {
   isLoadingHistory.value = true
   historyErrorMessage.value = ''
 
   try {
-    examHistory.value = await getAttemptHistory()
+    attemptHistory.value = await getAttemptHistory()
   } catch (error) {
     console.error(error)
-    historyErrorMessage.value = '后端历史记录暂时不可用，当前显示本地历史记录。'
-    examHistory.value = JSON.parse(localStorage.getItem('examHistory') || '[]')
+    historyErrorMessage.value = error.message || '考试历史加载失败'
   } finally {
     isLoadingHistory.value = false
   }
 }
 
-const loadWrongQuestionsFromApi = async () => {
+const loadWrongQuestions = async () => {
+  if (!isLoggedIn.value) {
+    return
+  }
+
   isLoadingWrongQuestions.value = true
   wrongQuestionErrorMessage.value = ''
 
@@ -96,212 +84,178 @@ const loadWrongQuestionsFromApi = async () => {
     wrongQuestions.value = await getWrongQuestions()
   } catch (error) {
     console.error(error)
-    wrongQuestionErrorMessage.value = '后端错题本暂时不可用，当前显示本地错题。'
-    wrongQuestions.value = JSON.parse(localStorage.getItem('wrongQuestions') || '[]')
+    wrongQuestionErrorMessage.value = error.message || '错题本加载失败'
   } finally {
     isLoadingWrongQuestions.value = false
   }
 }
 
-const loadProfileData = async () => {
-  await loadHistoryFromApi()
-  await loadWrongQuestionsFromApi()
-}
-
-const clearLocalHistory = () => {
-  const confirmed = window.confirm('确认清空本地历史记录吗？这不会删除数据库里的记录。')
-
-  if (!confirmed) {
-    return
-  }
-
-  localStorage.removeItem('examHistory')
-  loadProfileData()
-}
-
-const clearWrongQuestions = () => {
-  const confirmed = window.confirm('确认清空本地错题本吗？这不会删除数据库里的错题记录。')
-
-  if (!confirmed) {
-    return
-  }
-
-  localStorage.removeItem('wrongQuestions')
-  loadProfileData()
-}
-
 onMounted(() => {
-  loadProfileData()
+  loadAttemptHistory()
+  loadWrongQuestions()
 })
 </script>
 
 <template>
   <div class="profile-page">
     <div class="page-header">
-     <p class="tag">Profile</p>
-       <h1>个人中心</h1>
-     <p class="desc">
-      这里展示数据库中的考试历史记录，以及数据库 / 本地错题本记录。
-     </p>
-
-     <div v-if="currentUser" class="user-info-box">
-       <p>
-         当前登录：{{ currentUser.nickname || currentUser.username }}
-       </p>
-       <p>
-         角色：{{ currentUser.role }} ｜ 学段：{{ currentUser.gradeLevel || '未设置' }}
-       </p>
-         <button class="secondary-btn" @click="handleLogout">
-         退出登录
-       </button>
-      </div>
-
-    <div v-else class="user-info-box">
-      <p>当前未登录。你仍可以使用游客模式查看部分记录。</p>
-         <RouterLink class="primary-btn" to="/login">
-          去登录
-         </RouterLink>
-    </div>
-  </div>
-
-    <section class="profile-section">
-      <div class="section-title-row">
-        <h2>考试历史</h2>
-
-        <button class="secondary-btn" @click="clearLocalHistory">
-          清空本地历史
-        </button>
-      </div>
-
-      <div v-if="historyErrorMessage" class="api-warning">
-        {{ historyErrorMessage }}
-      </div>
-
-      <div v-if="isLoadingHistory" class="loading-box">
-        正在加载考试历史……
-      </div>
-
-      <div v-else-if="examHistory.length > 0" class="history-list">
-        <div
-          v-for="record in examHistory"
-          :key="record.id"
-          class="history-card"
-        >
-          <h3>{{ record.examTitle }}</h3>
-
-          <p>
-            得分：{{ record.earnedScore }} / {{ record.totalScore }}
-          </p>
-
-          <p>
-            正确率：{{ record.accuracyRate }}%
-          </p>
-
-          <p>
-            客观题得分：{{ record.objectiveScore }} 分
-          </p>
-
-          <p>
-            主观题得分：{{ record.subjectiveScore }} 分
-          </p>
-
-          <p>
-            提交方式：{{ formatSubmitType(record.submitType) }}
-          </p>
-
-          <p>
-            用时：{{ formatUsedTime(record.usedTime) }}
-          </p>
-
-          <p>
-            暂停次数：{{ record.pauseCount }} 次
-          </p>
-
-          <p>
-            答案数量：{{ record.answerCount || 0 }} 条
-          </p>
-
-          <p>
-            时间：{{ formatDateTime(record.createdAt) }}
-          </p>
-        </div>
-      </div>
-
-      <p v-else class="empty-text">
-        暂无考试历史。提交考试后即可在这里看到数据库记录。
+      <p class="tag">Profile</p>
+      <h1>个人中心</h1>
+      <p class="desc">
+        查看你的账号信息、考试历史和错题记录。
       </p>
+    </div>
+
+    <section v-if="!isLoggedIn" class="profile-login-card">
+      <h2>你还没有登录</h2>
+      <p>
+        登录后可以保存考试记录、查看错题本，并继续追踪学习情况。
+      </p>
+
+      <div class="profile-actions">
+        <RouterLink class="primary-btn" to="/login">
+          去登录
+        </RouterLink>
+
+        <RouterLink class="secondary-btn" to="/register">
+          注册账号
+        </RouterLink>
+      </div>
     </section>
 
-    <section class="profile-section">
-      <div class="section-title-row">
-        <h2>错题本</h2>
-
-        <button class="secondary-btn" @click="clearWrongQuestions">
-          清空本地错题
-        </button>
-      </div>
-
-      <div v-if="wrongQuestionErrorMessage" class="api-warning">
-        {{ wrongQuestionErrorMessage }}
-      </div>
-
-      <div v-if="isLoadingWrongQuestions" class="loading-box">
-        正在加载错题本……
-      </div>
-
-      <div v-else-if="wrongQuestions.length > 0" class="wrong-list">
-        <div
-          v-for="item in wrongQuestions"
-          :key="item.id"
-          class="wrong-card"
-        >
-          <p class="tag">
-            {{ item.knowledgePoint }}
-          </p>
-
-          <h3>{{ item.questionText }}</h3>
-
+    <section v-else class="profile-section">
+      <div class="profile-card">
+        <div>
+          <p class="tag">Account</p>
+          <h2>{{ currentUser.nickname || currentUser.username }}</h2>
           <p>
-            来源试卷：{{ item.examTitle }}
+            用户名：{{ currentUser.username }}
           </p>
-
           <p>
-            题型：{{ formatQuestionType(item.questionType || item.type) }}
+            角色：{{ roleNameMap[currentUser.role] || currentUser.role }}
           </p>
-
-          <p v-if="item.reason">
-            保存原因：{{ item.reason }}
-          </p>
-
-          <p v-if="item.note">
-            备注：{{ item.note }}
-          </p>
-
-          <p v-if="item.score">
-            题目分值：{{ item.score }} 分
-          </p>
-
-          <p v-if="item.earnedScore !== undefined">
-            得分：{{ item.earnedScore }} / {{ item.score }}
-          </p>
-
-          <p v-if="item.referenceAnswer">
-            参考答案：{{ item.referenceAnswer }}
-          </p>
-
-          <p v-if="item.explanation">
-            解析：{{ item.explanation }}
-          </p>
-
           <p>
-            保存时间：{{ formatDateTime(item.createdAt || item.savedAt) }}
+            学段：{{ gradeNameMap[currentUser.gradeLevel] || currentUser.gradeLevel }}
           </p>
+        </div>
+
+        <div class="profile-actions">
+          <RouterLink
+            v-if="currentUser.role === 'ADMIN'"
+            class="secondary-btn"
+            to="/admin"
+          >
+            管理员后台
+          </RouterLink>
+
+          <button class="secondary-btn" @click="handleLogout">
+            退出登录
+          </button>
         </div>
       </div>
 
-      <p v-else class="empty-text">
-        暂无错题。提交考试后点击“保存错题”即可出现在这里。
-      </p>
+      <div class="profile-grid">
+        <div class="profile-panel">
+          <div class="section-title-row">
+            <h2>考试历史</h2>
+            <button class="secondary-btn" @click="loadAttemptHistory">
+              刷新
+            </button>
+          </div>
+
+          <div v-if="historyErrorMessage" class="api-warning">
+            {{ historyErrorMessage }}
+          </div>
+
+          <div v-if="isLoadingHistory" class="loading-box">
+            正在加载考试历史……
+          </div>
+
+          <div v-else-if="attemptHistory.length > 0" class="history-list">
+            <div
+              v-for="attempt in attemptHistory"
+              :key="attempt.id"
+              class="history-item"
+            >
+              <div>
+                <h3>{{ attempt.examTitle || '未知试卷' }}</h3>
+                <p>
+                  总分：{{ attempt.totalScore }} 分 /
+                  正确率：{{ attempt.accuracyRate }}%
+                </p>
+                <p>
+                  用时：{{ formatUsedTime(attempt.usedTime) }}
+                </p>
+                <p>
+                  提交时间：{{ formatDateTime(attempt.submittedAt) }}
+                </p>
+              </div>
+
+              <RouterLink
+                class="secondary-btn"
+                :to="`/attempts/${attempt.id}`"
+              >
+                查看详情
+              </RouterLink>
+            </div>
+          </div>
+
+          <p v-else class="empty-text">
+            暂无考试历史。
+          </p>
+        </div>
+
+        <div class="profile-panel">
+          <div class="section-title-row">
+            <h2>错题本</h2>
+            <button class="secondary-btn" @click="loadWrongQuestions">
+              刷新
+            </button>
+          </div>
+
+          <div v-if="wrongQuestionErrorMessage" class="api-warning">
+            {{ wrongQuestionErrorMessage }}
+          </div>
+
+          <div v-if="isLoadingWrongQuestions" class="loading-box">
+            正在加载错题本……
+          </div>
+
+          <div v-else-if="wrongQuestions.length > 0" class="wrong-question-list">
+            <div
+              v-for="item in wrongQuestions"
+              :key="item.id"
+              class="wrong-question-item"
+            >
+              <p class="tag">
+                {{ item.questionType || '题目' }}
+              </p>
+
+              <h3>{{ item.questionText || '题目内容暂缺' }}</h3>
+
+              <p>
+                知识点：{{ item.knowledgePoint || '未分类' }}
+              </p>
+
+              <p>
+                来源试卷：{{ item.examTitle || '未知试卷' }}
+              </p>
+
+              <p v-if="item.referenceAnswer">
+                参考答案：{{ item.referenceAnswer }}
+              </p>
+
+              <p v-if="item.explanation">
+                解析：{{ item.explanation }}
+              </p>
+            </div>
+          </div>
+
+          <p v-else class="empty-text">
+            暂无错题。
+          </p>
+        </div>
+      </div>
     </section>
   </div>
 </template>

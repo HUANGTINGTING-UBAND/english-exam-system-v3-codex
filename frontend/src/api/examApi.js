@@ -73,6 +73,16 @@ export const getAttemptHistory = async () => {
   return parseResponse(response, '获取考试历史失败')
 }
 
+export const getAttemptDetail = async (attemptId) => {
+  const response = await fetch(`${API_BASE_URL}/attempts/${attemptId}/detail`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '获取考试结果详情失败')
+}
+
 export const saveWrongQuestions = async (wrongQuestionData) => {
   const response = await fetch(`${API_BASE_URL}/wrong-questions`, {
     method: 'POST',
