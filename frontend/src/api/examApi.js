@@ -159,6 +159,16 @@ export const getAdminExams = async () => {
   return parseResponse(response, '获取管理员试卷列表失败')
 }
 
+export const getAdminAttempts = async () => {
+  const response = await fetch(`${API_BASE_URL}/admin/attempts`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '获取管理员考试记录失败')
+}
+
 export const createAdminExam = async (examData) => {
   const response = await fetch(`${API_BASE_URL}/admin/exams`, {
     method: 'POST',

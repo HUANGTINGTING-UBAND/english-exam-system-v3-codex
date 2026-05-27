@@ -8,6 +8,7 @@ import RegisterView from '../views/RegisterView.vue'
 import AdminView from '../views/AdminView.vue'
 import AttemptDetailView from '../views/AttemptDetailView.vue'
 import WrongPracticeView from '../views/WrongPracticeView.vue'
+import AdminAttemptsView from '../views/AdminAttemptsView.vue'
 
 const routes = [
   {
@@ -55,6 +56,11 @@ const routes = [
     name: 'admin',
     component: AdminView,
   },
+  {
+  path: '/admin/attempts',
+  name: 'admin-attempts',
+  component: AdminAttemptsView,
+},
 ]
 
 const router = createRouter({
