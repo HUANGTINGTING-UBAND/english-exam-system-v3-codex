@@ -22,6 +22,7 @@ const isAdmin = computed(() => {
 })
 
 const exams = ref([])
+const examKeyword = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -90,6 +91,29 @@ const typeNameMap = {
   READING: '阅读理解',
   CLOZE: '完形填空',
 }
+
+const filteredExams = computed(() => {
+  const keyword = examKeyword.value.trim().toLowerCase()
+
+  if (!keyword) {
+    return exams.value
+  }
+
+  return exams.value.filter((exam) => {
+    const gradeName = gradeNameMap[exam.gradeLevel] || exam.gradeLevel || ''
+
+    const text = [
+      exam.title,
+      exam.description,
+      exam.gradeLevel,
+      gradeName,
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    return text.includes(keyword)
+  })
+})
 
 const importExampleText = `【单选题】
 1. She ___ to school every day.
@@ -842,19 +866,42 @@ onMounted(() => {
 
       <div class="admin-list-card admin-full-card">
         <div class="section-title-row">
-          <h2>数据库试卷列表</h2>
-          <button class="secondary-btn" @click="loadAdminExams">
-            刷新
-          </button>
-        </div>
+          <div>
+            <h2>数据库试卷列表</h2>
+              <p class="section-subtitle">
+               当前显示 {{ filteredExams.length }} / {{ exams.length }} 张试卷
+              </p>
+          </div>
+
+        <div class="admin-exam-search-actions">
+          <input
+            v-model="examKeyword"
+            class="admin-exam-search-input"
+            type="text"
+            placeholder="搜索试卷标题、说明或学段"
+          />
+
+          <button
+           v-if="examKeyword"
+           class="secondary-btn"
+           @click="examKeyword = ''"
+          >
+           清空搜索
+         </button>
+
+         <button class="secondary-btn" @click="loadAdminExams">
+           刷新
+         </button>
+       </div>
+       </div>
 
         <div v-if="isLoading" class="loading-box">
           正在加载管理员试卷列表……
         </div>
 
-        <div v-else-if="exams.length > 0" class="admin-exam-list">
+        <div v-else-if="filteredExams.length > 0" class="admin-exam-list">
           <div
-            v-for="exam in exams"
+            v-for="exam in filteredExams"
             :key="exam.id"
             class="admin-exam-item"
           >
@@ -949,7 +996,7 @@ onMounted(() => {
         </div>
 
         <p v-else class="empty-text">
-          暂无试卷。
+          {{ examKeyword ? '暂无符合搜索条件的试卷。' : '暂无试卷。' }}
         </p>
       </div>
 
