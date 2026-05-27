@@ -1843,3 +1843,9 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+.history-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}

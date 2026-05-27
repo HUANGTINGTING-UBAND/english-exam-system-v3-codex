@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getSavedUser, logoutUser } from '../api/authApi'
 import {
+  deleteAttemptHistory,
   getAttemptHistory,
   getWrongQuestions,
   markWrongQuestionMastered,
@@ -186,6 +187,42 @@ const refreshProfileData = async () => {
     loadAttemptHistory(),
     loadWrongQuestions(),
   ])
+}
+
+const handleDeleteAttempt = async (attempt) => {
+  const confirmed = window.confirm(
+    `确认删除这次考试记录吗？\n\n试卷：${attempt.examTitle || '未知试卷'}\n得分：${getAttemptScore(attempt)} / ${getAttemptFullScore(attempt)} 分\n\n删除后，该次考试答案和对应错题记录也会被删除。`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  const secondConfirmed = window.confirm(
+    '请再次确认：删除后不可恢复。是否继续？'
+  )
+
+  if (!secondConfirmed) {
+    return
+  }
+
+  historyErrorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await deleteAttemptHistory(attempt.id)
+
+    attemptHistory.value = attemptHistory.value.filter(
+      (item) => item.id !== attempt.id
+    )
+
+    await loadWrongQuestions()
+
+    successMessage.value = '考试记录已删除，相关答案和错题记录也已同步清理。'
+  } catch (error) {
+    console.error(error)
+    historyErrorMessage.value = error.message || '删除考试记录失败'
+  }
 }
 
 const handleMarkMastered = async (item) => {
@@ -383,12 +420,21 @@ onMounted(() => {
                 </p>
               </div>
 
-              <RouterLink
-                class="secondary-btn"
-                :to="`/attempts/${attempt.id}`"
-              >
-                查看详情
-              </RouterLink>
+              <div class="history-actions">
+                <RouterLink
+                  class="secondary-btn"
+                  :to="`/attempts/${attempt.id}`"
+                >
+                  查看详情
+                </RouterLink>
+
+                <button
+                  class="danger-btn"
+                  @click="handleDeleteAttempt(attempt)"
+                >
+                  删除记录
+                </button>
+              </div>
             </div>
           </div>
 

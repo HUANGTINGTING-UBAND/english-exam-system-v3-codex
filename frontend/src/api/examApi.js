@@ -83,6 +83,28 @@ export const getAttemptDetail = async (attemptId) => {
   return parseResponse(response, '获取考试结果详情失败')
 }
 
+export const deleteAttemptHistory = async (attemptId) => {
+  const response = await fetch(`${API_BASE_URL}/attempts/${attemptId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '删除考试记录失败')
+}
+
+export const deleteExamAttempt = async (attemptId) => {
+  const response = await fetch(`${API_BASE_URL}/attempts/${attemptId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '删除考试记录失败')
+}
+
 export const saveWrongQuestions = async (wrongQuestionData) => {
   const response = await fetch(`${API_BASE_URL}/wrong-questions`, {
     method: 'POST',

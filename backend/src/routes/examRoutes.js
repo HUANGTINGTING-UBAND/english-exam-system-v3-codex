@@ -547,6 +547,71 @@ router.get('/attempts/history', requireAuth, async (req, res) => {
   }
 })
 
+router.delete('/attempts/:attemptId', requireAuth, async (req, res) => {
+  try {
+    const { attemptId } = req.params
+
+    const attempt = await prisma.examAttempt.findUnique({
+      where: {
+        id: attemptId,
+      },
+    })
+
+    if (!attempt) {
+      return res.status(404).json({
+        message: '考试记录不存在',
+      })
+    }
+
+    const isOwner = attempt.userId === req.user.id
+    const isAdmin = req.user.role === 'ADMIN'
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({
+        message: '你无权删除这条考试记录',
+      })
+    }
+
+    const deletedResult = await prisma.$transaction(async (tx) => {
+      const deletedWrongQuestions = await tx.wrongQuestion.deleteMany({
+        where: {
+          attemptId,
+        },
+      })
+
+      const deletedUserAnswers = await tx.userAnswer.deleteMany({
+        where: {
+          attemptId,
+        },
+      })
+
+      const deletedAttempt = await tx.examAttempt.delete({
+        where: {
+          id: attemptId,
+        },
+      })
+
+      return {
+        deletedAttempt,
+        deletedWrongQuestions: deletedWrongQuestions.count,
+        deletedUserAnswers: deletedUserAnswers.count,
+      }
+    })
+
+    res.json({
+      message: '考试记录删除成功',
+      data: deletedResult,
+    })
+  } catch (error) {
+    console.error('Delete attempt error:', error)
+
+    res.status(500).json({
+      message: '考试记录删除失败',
+      error: error.message,
+    })
+  }
+})
+
 router.post('/wrong-questions', requireAuth, async (req, res) => {
   try {
     const { wrongQuestions } = req.body
