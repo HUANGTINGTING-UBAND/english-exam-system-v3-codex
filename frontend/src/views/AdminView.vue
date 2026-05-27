@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { getSavedUser } from '../api/authApi'
 import {
   createAdminExam,
@@ -664,6 +664,10 @@ onMounted(() => {
           你当前拥有管理员权限。现在可以查看数据库试卷、新增试卷、编辑试卷，并通过文件批量导入题目。
         </p>
       </div>
+
+      <RouterLink class="secondary-btn" to="/admin/attempts">
+       查看学生考试记录
+      </RouterLink>
 
       <div v-if="errorMessage" class="api-warning">
         {{ errorMessage }}
