@@ -72,23 +72,30 @@ router.get('/admin/exams', requireAdmin, async (req, res) => {
         questions: {
           select: {
             id: true,
+            score: true,
           },
         },
       },
     })
 
-    const formattedExams = exams.map((exam) => ({
-      id: exam.id,
-      title: exam.title,
-      gradeLevel: exam.gradeLevel,
-      description: exam.description,
-      timeLimit: exam.timeLimit,
-      totalScore: exam.totalScore,
-      isPublished: exam.isPublished,
-      questionCount: exam.questions.length,
-      createdAt: exam.createdAt,
-      updatedAt: exam.updatedAt,
-    }))
+    const formattedExams = exams.map((exam) => {
+      const realTotalScore = exam.questions.reduce((sum, question) => {
+        return sum + Number(question.score || 0)
+      }, 0)
+
+      return {
+        id: exam.id,
+        title: exam.title,
+        gradeLevel: exam.gradeLevel,
+        description: exam.description,
+        timeLimit: exam.timeLimit,
+        totalScore: realTotalScore,
+        isPublished: exam.isPublished,
+        questionCount: exam.questions.length,
+        createdAt: exam.createdAt,
+        updatedAt: exam.updatedAt,
+      }
+    })
 
     res.json({
       message: 'Admin exams loaded successfully',
@@ -127,7 +134,7 @@ router.post('/admin/exams', requireAdmin, async (req, res) => {
         gradeLevel: String(gradeLevel).toUpperCase(),
         description: description || '',
         timeLimit: Number(timeLimit || 3600),
-        totalScore: Number(totalScore || 100),
+        totalScore: 0,
         isPublished: Boolean(isPublished),
       },
     })
@@ -183,8 +190,7 @@ router.put('/admin/exams/:examId', requireAdmin, async (req, res) => {
         description: description ?? existingExam.description,
         timeLimit:
           timeLimit === undefined ? existingExam.timeLimit : Number(timeLimit),
-        totalScore:
-          totalScore === undefined ? existingExam.totalScore : Number(totalScore),
+        totalScore: existingExam.totalScore,
         isPublished:
           isPublished === undefined ? existingExam.isPublished : Boolean(isPublished),
       },
