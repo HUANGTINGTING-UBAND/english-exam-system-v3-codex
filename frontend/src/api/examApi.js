@@ -132,6 +132,17 @@ export const updateAdminExam = async (examId, examData) => {
   return parseResponse(response, '更新试卷失败')
 }
 
+export const deleteAdminExam = async (examId) => {
+  const response = await fetch(`${API_BASE_URL}/admin/exams/${examId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  })
+
+  return parseResponse(response, '删除试卷失败')
+}
+
 export const updateAdminExamPublishStatus = async (examId, isPublished) => {
   const response = await fetch(`${API_BASE_URL}/admin/exams/${examId}/publish`, {
     method: 'PATCH',

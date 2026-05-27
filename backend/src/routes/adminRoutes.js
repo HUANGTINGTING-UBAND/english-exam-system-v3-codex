@@ -37,27 +37,29 @@ const normalizeParsedQuestions = (questions) => {
     return []
   }
 
-  return questions.map((question, index) => {
-    const finalType = normalizeQuestionType(question.type)
+  return questions
+    .map((question, index) => {
+      const finalType = normalizeQuestionType(question.type)
 
-    return {
-      type: finalType,
-      text: String(question.text || '').trim(),
-      options:
-        finalType === 'CHOICE' && Array.isArray(question.options)
-          ? question.options.map((option) => String(option).trim()).filter(Boolean)
-          : null,
-      answer:
-        question.answer === undefined || question.answer === null || question.answer === ''
-          ? null
-          : question.answer,
-      score: Number(question.score || 0),
-      knowledgePoint: String(question.knowledgePoint || '未分类').trim(),
-      referenceAnswer: String(question.referenceAnswer || '').trim(),
-      explanation: String(question.explanation || '').trim(),
-      orderIndex: Number(question.orderIndex || index + 1),
-    }
-  }).filter((question) => question.text)
+      return {
+        type: finalType,
+        text: String(question.text || '').trim(),
+        options:
+          finalType === 'CHOICE' && Array.isArray(question.options)
+            ? question.options.map((option) => String(option).trim()).filter(Boolean)
+            : null,
+        answer:
+          question.answer === undefined || question.answer === null || question.answer === ''
+            ? null
+            : question.answer,
+        score: Number(question.score || 0),
+        knowledgePoint: String(question.knowledgePoint || '未分类').trim(),
+        referenceAnswer: String(question.referenceAnswer || '').trim(),
+        explanation: String(question.explanation || '').trim(),
+        orderIndex: Number(question.orderIndex || index + 1),
+      }
+    })
+    .filter((question) => question.text)
 }
 
 router.get('/admin/exams', requireAdmin, async (req, res) => {
@@ -197,6 +199,128 @@ router.put('/admin/exams/:examId', requireAdmin, async (req, res) => {
 
     res.status(500).json({
       message: '试卷更新失败',
+      error: error.message,
+    })
+  }
+})
+
+router.delete('/admin/exams/:examId', requireAdmin, async (req, res) => {
+  try {
+    const { examId } = req.params
+
+    console.log('Deleting exam:', examId)
+
+    const existingExam = await prisma.exam.findUnique({
+      where: {
+        id: examId,
+      },
+    })
+
+    if (!existingExam) {
+      return res.status(404).json({
+        message: '试卷不存在',
+        examId,
+      })
+    }
+
+    const questionsBeforeDelete = await prisma.question.count({
+      where: {
+        examId,
+      },
+    })
+
+    const attempts = await prisma.examAttempt.findMany({
+      where: {
+        examId,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    const attemptIds = attempts.map((attempt) => attempt.id)
+
+    const wrongQuestionsBeforeDelete = await prisma.wrongQuestion.count({
+      where: {
+        examId,
+      },
+    })
+
+    const userAnswersBeforeDelete = attemptIds.length
+      ? await prisma.userAnswer.count({
+          where: {
+            attemptId: {
+              in: attemptIds,
+            },
+          },
+        })
+      : 0
+
+    await prisma.$transaction(async (tx) => {
+      await tx.wrongQuestion.deleteMany({
+        where: {
+          examId,
+        },
+      })
+
+      if (attemptIds.length > 0) {
+        await tx.userAnswer.deleteMany({
+          where: {
+            attemptId: {
+              in: attemptIds,
+            },
+          },
+        })
+      }
+
+      await tx.examAttempt.deleteMany({
+        where: {
+          examId,
+        },
+      })
+
+      await tx.question.deleteMany({
+        where: {
+          examId,
+        },
+      })
+
+      await tx.exam.delete({
+        where: {
+          id: examId,
+        },
+      })
+    })
+
+    const examAfterDelete = await prisma.exam.findUnique({
+      where: {
+        id: examId,
+      },
+    })
+
+    if (examAfterDelete) {
+      return res.status(500).json({
+        message: '试卷删除失败：删除后数据库中仍然存在该试卷',
+        examId,
+      })
+    }
+
+    res.json({
+      message: '试卷删除成功',
+      data: {
+        id: existingExam.id,
+        title: existingExam.title,
+        deletedQuestions: questionsBeforeDelete,
+        deletedAttempts: attempts.length,
+        deletedUserAnswers: userAnswersBeforeDelete,
+        deletedWrongQuestions: wrongQuestionsBeforeDelete,
+      },
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      message: '试卷删除失败',
       error: error.message,
     })
   }
@@ -466,9 +590,15 @@ router.post('/admin/ai/parse-questions', requireAdmin, async (req, res) => {
       })
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    const openaiApiKey = String(process.env.OPENAI_API_KEY || '').trim()
+
+    if (
+      !openaiApiKey ||
+      openaiApiKey.includes('你的') ||
+      openaiApiKey.includes('OpenAI API Key')
+    ) {
       return res.status(500).json({
-        message: '服务器尚未配置 OPENAI_API_KEY，暂时无法使用 AI 解析',
+        message: '服务器尚未正确配置 OPENAI_API_KEY，请在 backend/.env 中填写真实 API Key',
       })
     }
 
@@ -509,7 +639,7 @@ ${String(rawText).trim()}
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

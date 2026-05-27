@@ -4,11 +4,13 @@ import { RouterLink } from 'vue-router'
 import { getSavedUser } from '../api/authApi'
 import {
   createAdminExam,
+  deleteAdminExam,
   deleteAdminQuestion,
   getAdminExamQuestions,
   getAdminExams,
   importQuestionsToExam,
   parseQuestionFile,
+  updateAdminExam,
   updateAdminExamPublishStatus,
   updateAdminQuestion,
 } from '../api/examApi'
@@ -37,10 +39,22 @@ const selectedQuestionExamTitle = ref('')
 const adminQuestions = ref([])
 const isLoadingQuestions = ref(false)
 
+const editingExamId = ref('')
+const isUpdatingExam = ref(false)
+
 const editingQuestionId = ref('')
 const isUpdatingQuestion = ref(false)
 
 const form = ref({
+  title: '',
+  gradeLevel: 'JUNIOR',
+  description: '',
+  timeLimit: 3600,
+  totalScore: 100,
+  isPublished: true,
+})
+
+const editExamForm = ref({
   title: '',
   gradeLevel: 'JUNIOR',
   description: '',
@@ -189,8 +203,22 @@ const loadAdminExams = async () => {
   try {
     exams.value = await getAdminExams()
 
-    if (!selectedExamId.value && exams.value.length > 0) {
-      selectedExamId.value = exams.value[0].id
+    const selectedExamStillExists = exams.value.some(
+      (exam) => exam.id === selectedExamId.value
+    )
+
+    if (!selectedExamId.value || !selectedExamStillExists) {
+      selectedExamId.value = exams.value[0]?.id || ''
+    }
+
+    const selectedQuestionExamStillExists = exams.value.some(
+      (exam) => exam.id === selectedQuestionExamId.value
+    )
+
+    if (selectedQuestionExamId.value && !selectedQuestionExamStillExists) {
+      selectedQuestionExamId.value = ''
+      selectedQuestionExamTitle.value = ''
+      adminQuestions.value = []
     }
   } catch (error) {
     console.error(error)
@@ -237,6 +265,119 @@ const handleCreateExam = async () => {
   } catch (error) {
     console.error(error)
     errorMessage.value = error.message || '试卷创建失败'
+  }
+}
+
+const openEditExam = (exam) => {
+  editingExamId.value = exam.id
+
+  editExamForm.value = {
+    title: exam.title || '',
+    gradeLevel: exam.gradeLevel || 'JUNIOR',
+    description: exam.description || '',
+    timeLimit: exam.timeLimit || 3600,
+    totalScore: exam.totalScore || 100,
+    isPublished: Boolean(exam.isPublished),
+  }
+}
+
+const closeEditExam = () => {
+  editingExamId.value = ''
+
+  editExamForm.value = {
+    title: '',
+    gradeLevel: 'JUNIOR',
+    description: '',
+    timeLimit: 3600,
+    totalScore: 100,
+    isPublished: true,
+  }
+}
+
+const handleUpdateExam = async () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  if (!editingExamId.value) {
+    errorMessage.value = '请先选择要编辑的试卷'
+    return
+  }
+
+  if (!editExamForm.value.title.trim()) {
+    errorMessage.value = '试卷标题不能为空'
+    return
+  }
+
+  isUpdatingExam.value = true
+
+  try {
+    await updateAdminExam(editingExamId.value, {
+      title: editExamForm.value.title.trim(),
+      gradeLevel: editExamForm.value.gradeLevel,
+      description: editExamForm.value.description.trim(),
+      timeLimit: Number(editExamForm.value.timeLimit),
+      totalScore: Number(editExamForm.value.totalScore),
+      isPublished: Boolean(editExamForm.value.isPublished),
+    })
+
+    successMessage.value = '试卷更新成功'
+    closeEditExam()
+    await loadAdminExams()
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '试卷更新失败'
+  } finally {
+    isUpdatingExam.value = false
+  }
+}
+
+const handleDeleteExam = async (exam) => {
+  const confirmed = window.confirm(
+    `确认删除试卷《${exam.title}》吗？\n\n删除后，该试卷下的题目、考试记录、用户答案和错题记录都会被删除。此操作不可恢复。`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  const secondConfirmed = window.confirm(
+    '请再次确认：你真的要删除这张试卷及其所有相关数据吗？'
+  )
+
+  if (!secondConfirmed) {
+    return
+  }
+
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await deleteAdminExam(exam.id)
+
+    successMessage.value = '试卷删除成功'
+
+    exams.value = exams.value.filter((item) => item.id !== exam.id)
+
+    if (selectedExamId.value === exam.id) {
+      selectedExamId.value = exams.value[0]?.id || ''
+      parsedQuestions.value = []
+      parsedFileName.value = ''
+    }
+
+    if (selectedQuestionExamId.value === exam.id) {
+      selectedQuestionExamId.value = ''
+      selectedQuestionExamTitle.value = ''
+      adminQuestions.value = []
+    }
+
+    if (editingExamId.value === exam.id) {
+      closeEditExam()
+    }
+
+    await loadAdminExams()
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = error.message || '试卷删除失败'
   }
 }
 
@@ -499,9 +640,7 @@ onMounted(() => {
 
     <section v-if="!currentUser" class="admin-guard-card">
       <h2>请先登录</h2>
-      <p>
-        你当前未登录。管理员后台需要登录后才能访问。
-      </p>
+      <p>你当前未登录。管理员后台需要登录后才能访问。</p>
 
       <RouterLink class="primary-btn" to="/login">
         去登录
@@ -510,12 +649,8 @@ onMounted(() => {
 
     <section v-else-if="!isAdmin" class="admin-guard-card">
       <h2>暂无管理员权限</h2>
-      <p>
-        当前账号：{{ currentUser.nickname || currentUser.username }}
-      </p>
-      <p>
-        你的角色是 {{ currentUser.role }}，暂时不能访问管理员后台。
-      </p>
+      <p>当前账号：{{ currentUser.nickname || currentUser.username }}</p>
+      <p>你的角色是 {{ currentUser.role }}，暂时不能访问管理员后台。</p>
 
       <RouterLink class="secondary-btn" to="/">
         返回首页
@@ -526,7 +661,7 @@ onMounted(() => {
       <div class="admin-welcome-card">
         <h2>欢迎，{{ currentUser.nickname || currentUser.username }}</h2>
         <p>
-          你当前拥有管理员权限。现在可以查看数据库试卷、新增试卷，并通过文件批量导入题目。
+          你当前拥有管理员权限。现在可以查看数据库试卷、新增试卷、编辑试卷，并通过文件批量导入题目。
         </p>
       </div>
 
@@ -684,9 +819,7 @@ onMounted(() => {
                 {{ typeNameMap[question.type] || question.type }}
               </p>
 
-              <h4>
-                {{ question.orderIndex }}. {{ question.text }}
-              </h4>
+              <h4>{{ question.orderIndex }}. {{ question.text }}</h4>
 
               <ul v-if="question.options && question.options.length > 0">
                 <li
@@ -724,33 +857,92 @@ onMounted(() => {
             :key="exam.id"
             class="admin-exam-item"
           >
-            <div>
-              <h3>{{ exam.title }}</h3>
-              <p>{{ exam.description || '暂无说明' }}</p>
+            <div class="admin-exam-main">
+              <template v-if="editingExamId === exam.id">
+                <div class="edit-question-form">
+                  <h3>编辑试卷</h3>
 
-              <div class="admin-exam-meta">
-                <span>学段：{{ gradeNameMap[exam.gradeLevel] || exam.gradeLevel }}</span>
-                <span>题目：{{ exam.questionCount }} 题</span>
-                <span>满分：{{ exam.totalScore }} 分</span>
-                <span>时长：{{ formatTimeLimit(exam.timeLimit) }}</span>
-                <span>状态：{{ exam.isPublished ? '已发布' : '已下架' }}</span>
-                <span>创建：{{ formatDateTime(exam.createdAt) }}</span>
-              </div>
+                  <label>
+                    试卷标题
+                    <input v-model="editExamForm.title" type="text" />
+                  </label>
+
+                  <label>
+                    学段
+                    <select v-model="editExamForm.gradeLevel">
+                      <option value="PRIMARY">小学</option>
+                      <option value="JUNIOR">初中</option>
+                      <option value="SENIOR">高中</option>
+                      <option value="COLLEGE">大学</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    试卷说明
+                    <textarea v-model="editExamForm.description" rows="3"></textarea>
+                  </label>
+
+                  <label>
+                    考试时间，单位：秒
+                    <input v-model="editExamForm.timeLimit" type="number" min="60" />
+                  </label>
+
+                  <label>
+                    试卷满分
+                    <input v-model="editExamForm.totalScore" type="number" min="1" />
+                  </label>
+
+                  <label class="checkbox-label">
+                    <input v-model="editExamForm.isPublished" type="checkbox" />
+                    发布试卷
+                  </label>
+
+                  <div class="edit-question-actions">
+                    <button
+                      class="primary-btn"
+                      :disabled="isUpdatingExam"
+                      @click="handleUpdateExam"
+                    >
+                      {{ isUpdatingExam ? '保存中……' : '保存试卷' }}
+                    </button>
+
+                    <button class="secondary-btn" @click="closeEditExam">
+                      取消
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <template v-else>
+                <h3>{{ exam.title }}</h3>
+                <p>{{ exam.description || '暂无说明' }}</p>
+
+                <div class="admin-exam-meta">
+                  <span>学段：{{ gradeNameMap[exam.gradeLevel] || exam.gradeLevel }}</span>
+                  <span>题目：{{ exam.questionCount }} 题</span>
+                  <span>满分：{{ exam.totalScore }} 分</span>
+                  <span>时长：{{ formatTimeLimit(exam.timeLimit) }}</span>
+                  <span>状态：{{ exam.isPublished ? '已发布' : '已下架' }}</span>
+                  <span>创建：{{ formatDateTime(exam.createdAt) }}</span>
+                </div>
+              </template>
             </div>
 
             <div class="admin-exam-actions">
-              <button
-                class="secondary-btn"
-                @click="handleLoadQuestions(exam)"
-              >
+              <button class="secondary-btn" @click="handleLoadQuestions(exam)">
                 查看题目
               </button>
 
-              <button
-                class="secondary-btn"
-                @click="handleTogglePublish(exam)"
-              >
+              <button class="secondary-btn" @click="openEditExam(exam)">
+                编辑试卷
+              </button>
+
+              <button class="secondary-btn" @click="handleTogglePublish(exam)">
                 {{ exam.isPublished ? '下架' : '发布' }}
+              </button>
+
+              <button class="danger-btn" @click="handleDeleteExam(exam)">
+                删除试卷
               </button>
             </div>
           </div>
@@ -783,17 +975,9 @@ onMounted(() => {
             class="admin-question-item"
           >
             <div class="admin-question-header">
-              <span class="question-order">
-                第 {{ question.orderIndex }} 题
-              </span>
-
-              <span class="question-type">
-                {{ typeNameMap[question.type] || question.type }}
-              </span>
-
-              <span class="question-score">
-                {{ question.score }} 分
-              </span>
+              <span class="question-order">第 {{ question.orderIndex }} 题</span>
+              <span class="question-type">{{ typeNameMap[question.type] || question.type }}</span>
+              <span class="question-score">{{ question.score }} 分</span>
             </div>
 
             <template v-if="editingQuestionId === question.id">
@@ -814,74 +998,42 @@ onMounted(() => {
 
                 <label>
                   题干
-                  <textarea
-                    v-model="editQuestionForm.text"
-                    rows="4"
-                    placeholder="请输入题干"
-                  ></textarea>
+                  <textarea v-model="editQuestionForm.text" rows="4"></textarea>
                 </label>
 
                 <label v-if="editQuestionForm.type === 'CHOICE'">
                   选项，每行一个选项
-                  <textarea
-                    v-model="editQuestionForm.optionsText"
-                    rows="5"
-                    placeholder="go&#10;goes&#10;went&#10;going"
-                  ></textarea>
+                  <textarea v-model="editQuestionForm.optionsText" rows="5"></textarea>
                 </label>
 
                 <label>
                   答案
-                  <input
-                    v-model="editQuestionForm.answer"
-                    type="text"
-                    placeholder="选择题可填 A/B/C/D 或 0/1/2/3"
-                  />
+                  <input v-model="editQuestionForm.answer" type="text" />
                 </label>
 
                 <label>
                   分值
-                  <input
-                    v-model="editQuestionForm.score"
-                    type="number"
-                    min="0"
-                  />
+                  <input v-model="editQuestionForm.score" type="number" min="0" />
                 </label>
 
                 <label>
                   知识点
-                  <input
-                    v-model="editQuestionForm.knowledgePoint"
-                    type="text"
-                    placeholder="例如：一般现在时"
-                  />
+                  <input v-model="editQuestionForm.knowledgePoint" type="text" />
                 </label>
 
                 <label>
                   参考答案
-                  <textarea
-                    v-model="editQuestionForm.referenceAnswer"
-                    rows="3"
-                    placeholder="请输入参考答案"
-                  ></textarea>
+                  <textarea v-model="editQuestionForm.referenceAnswer" rows="3"></textarea>
                 </label>
 
                 <label>
                   解析
-                  <textarea
-                    v-model="editQuestionForm.explanation"
-                    rows="3"
-                    placeholder="请输入解析"
-                  ></textarea>
+                  <textarea v-model="editQuestionForm.explanation" rows="3"></textarea>
                 </label>
 
                 <label>
                   题目顺序
-                  <input
-                    v-model="editQuestionForm.orderIndex"
-                    type="number"
-                    min="1"
-                  />
+                  <input v-model="editQuestionForm.orderIndex" type="number" min="1" />
                 </label>
 
                 <div class="edit-question-actions">
@@ -893,10 +1045,7 @@ onMounted(() => {
                     {{ isUpdatingQuestion ? '保存中……' : '保存修改' }}
                   </button>
 
-                  <button
-                    class="secondary-btn"
-                    @click="closeEditQuestion"
-                  >
+                  <button class="secondary-btn" @click="closeEditQuestion">
                     取消
                   </button>
                 </div>
@@ -907,21 +1056,13 @@ onMounted(() => {
               <h3>{{ question.text }}</h3>
 
               <ul v-if="question.options && question.options.length > 0">
-                <li
-                  v-for="(option, index) in question.options"
-                  :key="option"
-                >
+                <li v-for="(option, index) in question.options" :key="option">
                   {{ String.fromCharCode(65 + index) }}. {{ option }}
                 </li>
               </ul>
 
-              <p>
-                <strong>答案：</strong>{{ formatAnswer(question) }}
-              </p>
-
-              <p>
-                <strong>知识点：</strong>{{ question.knowledgePoint || '未分类' }}
-              </p>
+              <p><strong>答案：</strong>{{ formatAnswer(question) }}</p>
+              <p><strong>知识点：</strong>{{ question.knowledgePoint || '未分类' }}</p>
 
               <p v-if="question.referenceAnswer">
                 <strong>参考答案：</strong>{{ question.referenceAnswer }}
@@ -932,17 +1073,11 @@ onMounted(() => {
               </p>
 
               <div class="admin-question-actions">
-                <button
-                  class="secondary-btn"
-                  @click="openEditQuestion(question)"
-                >
+                <button class="secondary-btn" @click="openEditQuestion(question)">
                   编辑题目
                 </button>
 
-                <button
-                  class="danger-btn"
-                  @click="handleDeleteQuestion(question)"
-                >
+                <button class="danger-btn" @click="handleDeleteQuestion(question)">
                   删除题目
                 </button>
               </div>
