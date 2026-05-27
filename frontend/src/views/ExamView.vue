@@ -407,8 +407,13 @@ const startExam = () => {
     )
 
     if (confirmed) {
-      router.push('/login')
-    }
+     router.push({
+       path: '/login',
+       query: {
+         redirect: route.fullPath,
+        },
+     })
+   }
 
     return
   }

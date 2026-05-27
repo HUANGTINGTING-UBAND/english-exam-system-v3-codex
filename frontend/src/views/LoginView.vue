@@ -1,9 +1,10 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { loginUser, saveAuthData } from '../api/authApi'
 
 const router = useRouter()
+const route = useRoute()
 
 const username = ref('')
 const password = ref('')
@@ -28,7 +29,8 @@ const handleLogin = async () => {
 
     saveAuthData(authData)
     window.alert('登录成功')
-    router.push('/profile')
+    const redirectPath = route.query.redirect || '/profile'
+    router.push(String(redirectPath))
   } catch (error) {
     console.error(error)
     errorMessage.value = error.message || '登录失败'
