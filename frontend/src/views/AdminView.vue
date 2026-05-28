@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import { getSavedUser } from '../api/authApi'
 import {
   createAdminExam,
@@ -40,6 +40,7 @@ const showImportExample = ref(false)
 const selectedQuestionExamId = ref('')
 const selectedQuestionExamTitle = ref('')
 const adminQuestions = ref([])
+const questionTypeFilter = ref('ALL')
 const isLoadingQuestions = ref(false)
 
 const editingExamId = ref('')
@@ -148,6 +149,16 @@ const filteredExams = computed(() => {
     }
 
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+})
+
+const filteredAdminQuestions = computed(() => {
+  if (questionTypeFilter.value === 'ALL') {
+    return adminQuestions.value
+  }
+
+  return adminQuestions.value.filter((question) => {
+    return question.type === questionTypeFilter.value
   })
 })
 
@@ -285,6 +296,7 @@ const loadAdminExams = async () => {
       selectedQuestionExamId.value = ''
       selectedQuestionExamTitle.value = ''
       adminQuestions.value = []
+      questionTypeFilter.value = 'ALL'
     }
   } catch (error) {
     console.error(error)
@@ -434,6 +446,7 @@ const handleDeleteExam = async (exam) => {
       selectedQuestionExamId.value = ''
       selectedQuestionExamTitle.value = ''
       adminQuestions.value = []
+      questionTypeFilter.value = 'ALL'
     }
 
     if (editingExamId.value === exam.id) {
@@ -559,6 +572,7 @@ const handleLoadQuestions = async (exam) => {
   selectedQuestionExamId.value = exam.id
   selectedQuestionExamTitle.value = exam.title
   editingQuestionId.value = ''
+  questionTypeFilter.value = 'ALL'
   await handleLoadQuestionsByExamId(exam.id)
 }
 
@@ -654,7 +668,7 @@ const handleUpdateQuestion = async () => {
     await loadAdminExams()
 
     if (selectedQuestionExamId.value) {
-     await handleLoadQuestionsByExamId(selectedQuestionExamId.value)
+      await handleLoadQuestionsByExamId(selectedQuestionExamId.value)
     }
   } catch (error) {
     console.error(error)
@@ -733,9 +747,11 @@ onMounted(() => {
         </p>
       </div>
 
-      <RouterLink class="secondary-btn" to="/admin/attempts">
-       查看学生考试记录
-      </RouterLink>
+      <div class="admin-shortcut-actions">
+        <RouterLink class="secondary-btn" to="/admin/attempts">
+          查看学生考试记录
+        </RouterLink>
+      </div>
 
       <div v-if="errorMessage" class="api-warning">
         {{ errorMessage }}
@@ -787,7 +803,7 @@ onMounted(() => {
           </label>
 
           <p class="form-tip">
-           试卷满分将根据题目分值自动统计，无需手动填写。
+            试卷满分将根据题目分值自动统计，无需手动填写。
           </p>
 
           <label class="checkbox-label">
@@ -907,64 +923,64 @@ onMounted(() => {
       </div>
 
       <div class="admin-list-card admin-full-card">
-  <div class="section-title-row">
-    <div>
-      <h2>数据库试卷列表</h2>
-      <p class="section-subtitle">
-        当前显示 {{ filteredExams.length }} / {{ exams.length }} 张试卷
-      </p>
-    </div>
+        <div class="section-title-row">
+          <div>
+            <h2>数据库试卷列表</h2>
+            <p class="section-subtitle">
+              当前显示 {{ filteredExams.length }} / {{ exams.length }} 张试卷
+            </p>
+          </div>
 
-    <div class="admin-exam-search-actions">
-      <input
-        v-model="examKeyword"
-        class="admin-exam-search-input"
-        type="text"
-        placeholder="搜索试卷标题、说明或学段"
-      />
+          <div class="admin-exam-search-actions">
+            <input
+              v-model="examKeyword"
+              class="admin-exam-search-input"
+              type="text"
+              placeholder="搜索试卷标题、说明或学段"
+            />
 
-      <select
-        v-model="examGradeFilter"
-        class="admin-exam-grade-select"
-      >
-        <option value="ALL">全部学段</option>
-        <option value="PRIMARY">小学</option>
-        <option value="JUNIOR">初中</option>
-        <option value="SENIOR">高中</option>
-        <option value="COLLEGE">大学</option>
-      </select>
+            <select
+              v-model="examGradeFilter"
+              class="admin-exam-grade-select"
+            >
+              <option value="ALL">全部学段</option>
+              <option value="PRIMARY">小学</option>
+              <option value="JUNIOR">初中</option>
+              <option value="SENIOR">高中</option>
+              <option value="COLLEGE">大学</option>
+            </select>
 
-      <select
-        v-model="examSortType"
-        class="admin-exam-grade-select"
-      >
-      <option value="NEWEST">最新创建优先</option>
-      <option value="OLDEST">最早创建优先</option>
-      <option value="QUESTION_DESC">题目数量多到少</option>
-      <option value="QUESTION_ASC">题目数量少到多</option>
-      <option value="SCORE_DESC">满分高到低</option>
-      <option value="SCORE_ASC">满分低到高</option>
-      <option value="PUBLISHED_FIRST">已发布优先</option>
-      <option value="UNPUBLISHED_FIRST">未发布优先</option>
-      </select>
+            <select
+              v-model="examSortType"
+              class="admin-exam-grade-select"
+            >
+              <option value="NEWEST">最新创建优先</option>
+              <option value="OLDEST">最早创建优先</option>
+              <option value="QUESTION_DESC">题目数量多到少</option>
+              <option value="QUESTION_ASC">题目数量少到多</option>
+              <option value="SCORE_DESC">满分高到低</option>
+              <option value="SCORE_ASC">满分低到高</option>
+              <option value="PUBLISHED_FIRST">已发布优先</option>
+              <option value="UNPUBLISHED_FIRST">未发布优先</option>
+            </select>
 
-      <button
-        v-if="examKeyword || examGradeFilter !== 'ALL'|| examSortType !== 'NEWEST'"
-        class="secondary-btn"
-        @click="clearExamFilters"
-      >
-        清空筛选
-      </button>
+            <button
+              v-if="examKeyword || examGradeFilter !== 'ALL' || examSortType !== 'NEWEST'"
+              class="secondary-btn"
+              @click="clearExamFilters"
+            >
+              清空筛选
+            </button>
 
-      <button class="secondary-btn" @click="loadAdminExams">
-        刷新
-      </button>
-    </div>
-  </div>
+            <button class="secondary-btn" @click="loadAdminExams">
+              刷新
+            </button>
+          </div>
+        </div>
 
-       <div v-if="isLoading" class="loading-box">
-         正在加载管理员试卷列表……
-       </div>
+        <div v-if="isLoading" class="loading-box">
+          正在加载管理员试卷列表……
+        </div>
 
         <div v-else-if="filteredExams.length > 0" class="admin-exam-list">
           <div
@@ -1003,7 +1019,7 @@ onMounted(() => {
                   </label>
 
                   <p class="form-tip">
-                   试卷满分将根据题目分值自动统计，无需手动填写。
+                    试卷满分将根据题目分值自动统计，无需手动填写。
                   </p>
 
                   <label class="checkbox-label">
@@ -1069,22 +1085,51 @@ onMounted(() => {
 
       <div v-if="selectedQuestionExamId" class="admin-question-card">
         <div class="section-title-row">
-          <h2>题目列表：{{ selectedQuestionExamTitle }}</h2>
-          <button
-            class="secondary-btn"
-            @click="handleLoadQuestionsByExamId(selectedQuestionExamId)"
-          >
-            刷新题目
-          </button>
+          <div>
+            <h2>题目列表：{{ selectedQuestionExamTitle }}</h2>
+            <p class="section-subtitle">
+              当前显示 {{ filteredAdminQuestions.length }} / {{ adminQuestions.length }} 道题
+            </p>
+          </div>
+
+          <div class="admin-exam-search-actions">
+            <select
+              v-model="questionTypeFilter"
+              class="admin-exam-grade-select"
+            >
+              <option value="ALL">全部题型</option>
+              <option value="CHOICE">单选题</option>
+              <option value="TRANSLATION">翻译题</option>
+              <option value="ERROR_CORRECTION">改错题</option>
+              <option value="WRITING">写作题</option>
+              <option value="READING">阅读理解</option>
+              <option value="CLOZE">完形填空</option>
+            </select>
+
+            <button
+              v-if="questionTypeFilter !== 'ALL'"
+              class="secondary-btn"
+              @click="questionTypeFilter = 'ALL'"
+            >
+              清空筛选
+            </button>
+
+            <button
+              class="secondary-btn"
+              @click="handleLoadQuestionsByExamId(selectedQuestionExamId)"
+            >
+              刷新题目
+            </button>
+          </div>
         </div>
 
         <div v-if="isLoadingQuestions" class="loading-box">
           正在加载题目……
         </div>
 
-        <div v-else-if="adminQuestions.length > 0" class="admin-question-list">
+        <div v-else-if="filteredAdminQuestions.length > 0" class="admin-question-list">
           <div
-            v-for="question in adminQuestions"
+            v-for="question in filteredAdminQuestions"
             :key="question.id"
             class="admin-question-item"
           >
@@ -1200,7 +1245,7 @@ onMounted(() => {
         </div>
 
         <p v-else class="empty-text">
-          当前试卷暂无题目。
+          {{ questionTypeFilter === 'ALL' ? '当前试卷暂无题目。' : '当前筛选条件下暂无题目。' }}
         </p>
       </div>
     </section>
