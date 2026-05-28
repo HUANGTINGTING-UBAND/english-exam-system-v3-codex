@@ -3,6 +3,38 @@ const prisma = require('../lib/prisma')
 const { requireAuth } = require('../middlewares/authMiddleware')
 
 const router = express.Router()
+const examCategoryGroups = {
+  K12: ['PRIMARY', 'JUNIOR', 'SENIOR'],
+  COLLEGE: ['COLLEGE', 'CET4', 'CET6', 'POSTGRADUATE'],
+  ABROAD: ['IELTS', 'TOEFL'],
+  OTHER_EXAM: ['BUSINESS', 'ADULT', 'PROFESSIONAL'],
+  OTHER: ['GENERAL', 'OTHER'],
+}
+
+const normalizeExamCategory = (value) => {
+  if (!value) {
+    return ''
+  }
+
+  return String(value).trim().toUpperCase()
+}
+
+const buildExamGradeWhere = ({ grade, group }) => {
+  const normalizedGroup = normalizeExamCategory(group)
+  const normalizedGrade = normalizeExamCategory(grade)
+
+  if (normalizedGroup && examCategoryGroups[normalizedGroup]) {
+    return {
+      in: examCategoryGroups[normalizedGroup],
+    }
+  }
+
+  if (normalizedGrade) {
+    return normalizedGrade
+  }
+
+  return undefined
+}
 
 const normalizeSubmitType = (submitType) => {
   const text = String(submitType || 'MANUAL').trim().toUpperCase()
@@ -125,17 +157,18 @@ const normalizeSubmittedAnswers = (answers) => {
 
 router.get('/exams', async (req, res) => {
   try {
-    const { grade } = req.query
+    const { grade, group } = req.query
+    const gradeWhere = buildExamGradeWhere({ grade, group })
 
     const exams = await prisma.exam.findMany({
       where: {
-        isPublished: true,
-        ...(grade
-          ? {
-              gradeLevel: String(grade).toUpperCase(),
-            }
-          : {}),
-      },
+       isPublished: true,
+        ...(gradeWhere
+         ? {
+           gradeLevel: gradeWhere,
+           }
+       : {}),
+     },
       orderBy: {
         createdAt: 'desc',
       },

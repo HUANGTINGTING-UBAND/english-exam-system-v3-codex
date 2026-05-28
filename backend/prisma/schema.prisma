@@ -16,6 +16,16 @@ enum GradeLevel {
   JUNIOR
   SENIOR
   COLLEGE
+  CET4
+  CET6
+  POSTGRADUATE
+  IELTS
+  TOEFL
+  BUSINESS
+  ADULT
+  PROFESSIONAL
+  GENERAL
+  OTHER
 }
 
 enum QuestionType {

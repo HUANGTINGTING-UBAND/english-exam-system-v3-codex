@@ -124,7 +124,7 @@ router.post('/admin/exams', requireAdmin, async (req, res) => {
 
     if (!title || !gradeLevel) {
       return res.status(400).json({
-        message: '试卷标题和学段不能为空',
+        message: '试卷标题和试卷分类不能为空',
       })
     }
 
@@ -635,7 +635,7 @@ router.post('/admin/ai/parse-questions', requireAdmin, async (req, res) => {
 5. 如果没有解析到知识点，请根据题目内容合理判断。
 6. 如果选择题答案是 A/B/C/D，请转换为 0/1/2/3。
 7. 如果题目没有解析，请不要编造题目。
-8. 适用学段：${gradeLevel || '未指定'}
+8. 适用试卷分类：${gradeLevel || '未指定'}
 9. 试卷标题：${examTitle || '未指定'}
 
 试卷文本如下：

@@ -58,20 +58,20 @@ const exams = [
   {
     id: 'college_mock_2026_001',
     title: '2026 大学英语模拟卷 001',
-    gradeLevel: 'COLLEGE',
+    gradeLevel: 'CET4',
     questionCount: 10,
     totalScore: 100,
     timeLimit: 5400,
-    description: '适合大学英语综合训练，覆盖词汇、阅读、翻译和写作。',
+    description: '适合大学英语四级方向练习，强化词汇、阅读、翻译和写作。',
   },
   {
     id: 'college_mock_2026_002',
     title: '2026 大学英语模拟卷 002',
-    gradeLevel: 'COLLEGE',
+    gradeLevel: 'CET6',
     questionCount: 10,
     totalScore: 100,
     timeLimit: 5400,
-    description: '适合四六级基础方向练习，强化阅读理解和翻译表达。',
+    description: '适合大学英语六级方向练习，强化长阅读、翻译表达和写作能力。',
   },
 ]
 
