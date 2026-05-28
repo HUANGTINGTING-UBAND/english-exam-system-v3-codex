@@ -1946,3 +1946,18 @@ h1 {
     width: 100%;
   }
 }
+.admin-exam-grade-select {
+  min-width: 140px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font: inherit;
+  background: white;
+}
+
+@media (max-width: 720px) {
+  .admin-exam-grade-select {
+    width: 100%;
+    min-width: 0;
+  }
+}

@@ -23,6 +23,7 @@ const isAdmin = computed(() => {
 
 const exams = ref([])
 const examKeyword = ref('')
+const examGradeFilter = ref('ALL')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -95,10 +96,6 @@ const typeNameMap = {
 const filteredExams = computed(() => {
   const keyword = examKeyword.value.trim().toLowerCase()
 
-  if (!keyword) {
-    return exams.value
-  }
-
   return exams.value.filter((exam) => {
     const gradeName = gradeNameMap[exam.gradeLevel] || exam.gradeLevel || ''
 
@@ -111,7 +108,13 @@ const filteredExams = computed(() => {
       .join(' ')
       .toLowerCase()
 
-    return text.includes(keyword)
+    const matchedKeyword = !keyword || text.includes(keyword)
+
+    const matchedGrade =
+      examGradeFilter.value === 'ALL' ||
+      exam.gradeLevel === examGradeFilter.value
+
+    return matchedKeyword && matchedGrade
   })
 })
 
@@ -214,6 +217,11 @@ const optionsTextToArray = (optionsText) => {
     .filter(Boolean)
     .map((line) => line.replace(/^[A-D][\.．、]\s*/i, '').trim())
     .filter(Boolean)
+}
+
+const clearExamFilters = () => {
+  examKeyword.value = ''
+  examGradeFilter.value = 'ALL'
 }
 
 const loadAdminExams = async () => {
@@ -865,39 +873,50 @@ onMounted(() => {
       </div>
 
       <div class="admin-list-card admin-full-card">
-        <div class="section-title-row">
-          <div>
-            <h2>数据库试卷列表</h2>
-              <p class="section-subtitle">
-               当前显示 {{ filteredExams.length }} / {{ exams.length }} 张试卷
-              </p>
-          </div>
+  <div class="section-title-row">
+    <div>
+      <h2>数据库试卷列表</h2>
+      <p class="section-subtitle">
+        当前显示 {{ filteredExams.length }} / {{ exams.length }} 张试卷
+      </p>
+    </div>
 
-        <div class="admin-exam-search-actions">
-          <input
-            v-model="examKeyword"
-            class="admin-exam-search-input"
-            type="text"
-            placeholder="搜索试卷标题、说明或学段"
-          />
+    <div class="admin-exam-search-actions">
+      <input
+        v-model="examKeyword"
+        class="admin-exam-search-input"
+        type="text"
+        placeholder="搜索试卷标题、说明或学段"
+      />
 
-          <button
-           v-if="examKeyword"
-           class="secondary-btn"
-           @click="examKeyword = ''"
-          >
-           清空搜索
-         </button>
+      <select
+        v-model="examGradeFilter"
+        class="admin-exam-grade-select"
+      >
+        <option value="ALL">全部学段</option>
+        <option value="PRIMARY">小学</option>
+        <option value="JUNIOR">初中</option>
+        <option value="SENIOR">高中</option>
+        <option value="COLLEGE">大学</option>
+      </select>
 
-         <button class="secondary-btn" @click="loadAdminExams">
-           刷新
-         </button>
+      <button
+        v-if="examKeyword || examGradeFilter !== 'ALL'"
+        class="secondary-btn"
+        @click="clearExamFilters"
+      >
+        清空筛选
+      </button>
+
+      <button class="secondary-btn" @click="loadAdminExams">
+        刷新
+      </button>
+    </div>
+  </div>
+
+       <div v-if="isLoading" class="loading-box">
+         正在加载管理员试卷列表……
        </div>
-       </div>
-
-        <div v-if="isLoading" class="loading-box">
-          正在加载管理员试卷列表……
-        </div>
 
         <div v-else-if="filteredExams.length > 0" class="admin-exam-list">
           <div
@@ -996,7 +1015,7 @@ onMounted(() => {
         </div>
 
         <p v-else class="empty-text">
-          {{ examKeyword ? '暂无符合搜索条件的试卷。' : '暂无试卷。' }}
+          {{ examKeyword || examGradeFilter !== 'ALL' ? '暂无符合筛选条件的试卷。' : '暂无试卷。' }}
         </p>
       </div>
 
