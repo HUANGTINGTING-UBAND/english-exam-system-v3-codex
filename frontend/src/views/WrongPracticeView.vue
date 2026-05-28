@@ -40,6 +40,65 @@ const correctAnswerText = computed(() => {
   return question.value?.correctAnswerDisplay || question.value?.referenceAnswer || '暂无'
 })
 
+const hasUserAnswered = computed(() => {
+  if (isChoiceQuestion.value) {
+    return userChoice.value !== null && userChoice.value !== undefined
+  }
+
+  return Boolean(String(userTextAnswer.value || '').trim())
+})
+
+const resultTitle = computed(() => {
+  if (!hasSubmitted.value) {
+    return ''
+  }
+
+  if (isCorrect.value) {
+    return '回答正确'
+  }
+
+  return '需要复习'
+})
+
+const resultSuggestion = computed(() => {
+  if (!hasSubmitted.value) {
+    return '提交后可以查看答案、解析和复习建议。'
+  }
+
+  if (isCorrect.value) {
+    return '这次回答正确。确认已经掌握后，可以点击“标记已掌握”，让它从错题本中移除。'
+  }
+
+  return '这道题仍需复习。建议先阅读解析，再点击“再练一次”重新作答。'
+})
+
+const practiceTip = computed(() => {
+  if (!question.value) {
+    return ''
+  }
+
+  if (isChoiceQuestion.value) {
+    return '选择一个选项后提交，系统会立即判断是否正确。'
+  }
+
+  return '主观题会按参考答案进行简单匹配，建议提交后重点查看参考答案和解析。'
+})
+
+const selectedChoiceText = computed(() => {
+  if (!isChoiceQuestion.value || userChoice.value === null || userChoice.value === undefined) {
+    return '未作答'
+  }
+
+  const index = Number(userChoice.value)
+  const option = question.value?.options?.[index]
+
+  if (!option) {
+    return '未作答'
+  }
+
+  return `${String.fromCharCode(65 + index)}. ${option}`
+})
+
 const loadPracticeDetail = async () => {
   const wrongQuestionId = route.params.wrongQuestionId
 
@@ -63,6 +122,11 @@ const loadPracticeDetail = async () => {
 
 const handleSubmitPractice = () => {
   if (!question.value) {
+    return
+  }
+
+  if (!hasUserAnswered.value) {
+    window.alert('请先作答，再提交练习。')
     return
   }
 
@@ -136,7 +200,7 @@ onMounted(() => {
       <p class="tag">Wrong Question Practice</p>
       <h1>错题重练</h1>
       <p class="desc">
-        重新练习错题，查看正确答案、解析和知识点。
+        重新练习错题，查看正确答案、解析、知识点和复习建议。
       </p>
     </div>
 
@@ -173,6 +237,10 @@ onMounted(() => {
 
         <h2>{{ question.text }}</h2>
 
+        <p class="wrong-practice-tip">
+          {{ practiceTip }}
+        </p>
+
         <div v-if="isChoiceQuestion" class="wrong-choice-list">
           <label
             v-for="(option, index) in question.options || []"
@@ -180,6 +248,7 @@ onMounted(() => {
             class="wrong-choice-option"
             :class="{
               selected: Number(userChoice) === index,
+              disabled: hasSubmitted,
             }"
           >
             <input
@@ -209,6 +278,7 @@ onMounted(() => {
           <button
             v-if="!hasSubmitted"
             class="primary-btn"
+            :disabled="!hasUserAnswered"
             @click="handleSubmitPractice"
           >
             提交练习
@@ -232,18 +302,25 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="hasSubmitted" class="wrong-practice-result-card">
+      <div
+        v-if="hasSubmitted"
+        class="wrong-practice-result-card"
+        :class="{
+          correct: isCorrect,
+          wrong: !isCorrect,
+        }"
+      >
         <h2>
-          {{ isCorrect ? '回答正确' : '需要复习' }}
+          {{ resultTitle }}
         </h2>
+
+        <p class="wrong-practice-result-suggestion">
+          {{ resultSuggestion }}
+        </p>
 
         <p v-if="isChoiceQuestion">
           <strong>你的答案：</strong>
-          <span v-if="userChoice !== null">
-            {{ String.fromCharCode(65 + Number(userChoice)) }}.
-            {{ question.options?.[Number(userChoice)] }}
-          </span>
-          <span v-else>未作答</span>
+          {{ selectedChoiceText }}
         </p>
 
         <p v-else>

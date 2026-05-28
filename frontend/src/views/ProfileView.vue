@@ -18,6 +18,11 @@ const historyErrorMessage = ref('')
 const wrongQuestionErrorMessage = ref('')
 const successMessage = ref('')
 
+const wrongKeyword = ref('')
+const wrongTypeFilter = ref('ALL')
+const wrongKnowledgeFilter = ref('ALL')
+const wrongSortType = ref('NEWEST')
+
 const isLoggedIn = computed(() => {
   return Boolean(currentUser.value)
 })
@@ -27,12 +32,139 @@ const roleNameMap = {
   ADMIN: '管理员',
 }
 
+const typeNameMap = {
+  CHOICE: '单选题',
+  TRANSLATION: '翻译题',
+  ERROR_CORRECTION: '改错题',
+  WRITING: '写作题',
+  READING: '阅读理解',
+  CLOZE: '完形填空',
+}
+
 const totalAttempts = computed(() => {
   return attemptHistory.value.length
 })
 
 const totalWrongQuestions = computed(() => {
   return wrongQuestions.value.length
+})
+
+const uniqueWrongKnowledgePoints = computed(() => {
+  const set = new Set()
+
+  wrongQuestions.value.forEach((item) => {
+    set.add(item.knowledgePoint || '未分类')
+  })
+
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+})
+
+const uniqueWrongTypes = computed(() => {
+  const set = new Set()
+
+  wrongQuestions.value.forEach((item) => {
+    set.add(item.questionType || 'UNKNOWN')
+  })
+
+  return Array.from(set).sort((a, b) => {
+    const nameA = typeNameMap[a] || a
+    const nameB = typeNameMap[b] || b
+
+    return nameA.localeCompare(nameB, 'zh-CN')
+  })
+})
+
+const filteredWrongQuestions = computed(() => {
+  const keyword = wrongKeyword.value.trim().toLowerCase()
+
+  const result = wrongQuestions.value.filter((item) => {
+    const knowledgePoint = item.knowledgePoint || '未分类'
+    const questionType = item.questionType || 'UNKNOWN'
+
+    const text = [
+      item.questionText,
+      item.examTitle,
+      knowledgePoint,
+      item.referenceAnswer,
+      item.explanation,
+      typeNameMap[questionType],
+      questionType,
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    const matchedKeyword = !keyword || text.includes(keyword)
+
+    const matchedType =
+      wrongTypeFilter.value === 'ALL' ||
+      questionType === wrongTypeFilter.value
+
+    const matchedKnowledge =
+      wrongKnowledgeFilter.value === 'ALL' ||
+      knowledgePoint === wrongKnowledgeFilter.value
+
+    return matchedKeyword && matchedType && matchedKnowledge
+  })
+
+  return [...result].sort((a, b) => {
+    if (wrongSortType.value === 'OLDEST') {
+      return new Date(a.createdAt || a.savedAt || 0).getTime() -
+        new Date(b.createdAt || b.savedAt || 0).getTime()
+    }
+
+    if (wrongSortType.value === 'KNOWLEDGE_ASC') {
+      return String(a.knowledgePoint || '未分类').localeCompare(
+        String(b.knowledgePoint || '未分类'),
+        'zh-CN'
+      )
+    }
+
+    if (wrongSortType.value === 'TYPE_ASC') {
+      const typeA = typeNameMap[a.questionType] || a.questionType || ''
+      const typeB = typeNameMap[b.questionType] || b.questionType || ''
+
+      return typeA.localeCompare(typeB, 'zh-CN')
+    }
+
+    return new Date(b.createdAt || b.savedAt || 0).getTime() -
+      new Date(a.createdAt || a.savedAt || 0).getTime()
+  })
+})
+
+const hasWrongFilter = computed(() => {
+  return (
+    wrongKeyword.value.trim() ||
+    wrongTypeFilter.value !== 'ALL' ||
+    wrongKnowledgeFilter.value !== 'ALL' ||
+    wrongSortType.value !== 'NEWEST'
+  )
+})
+
+const topWrongKnowledgePoints = computed(() => {
+  const map = new Map()
+
+  wrongQuestions.value.forEach((item) => {
+    const key = item.knowledgePoint || '未分类'
+    map.set(key, (map.get(key) || 0) + 1)
+  })
+
+  return Array.from(map.entries())
+    .map(([name, count]) => ({
+      name,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+})
+
+const mainWrongKnowledgeText = computed(() => {
+  if (topWrongKnowledgePoints.value.length === 0) {
+    return '暂无'
+  }
+
+  return topWrongKnowledgePoints.value
+    .map((item) => `${item.name}（${item.count}题）`)
+    .join('、')
 })
 
 const getAttemptFullScore = (attempt) => {
@@ -106,7 +238,7 @@ const learningSuggestion = computed(() => {
   }
 
   if (totalWrongQuestions.value >= 8) {
-    return '当前错题较多，建议优先完成错题重练，把错题逐步标记为已掌握。'
+    return `当前错题较多，建议优先处理 ${mainWrongKnowledgeText.value}，先完成错题重练，再进行整卷训练。`
   }
 
   if (averageScoreRate.value < 60 || averageAccuracy.value < 60) {
@@ -114,6 +246,18 @@ const learningSuggestion = computed(() => {
   }
 
   return '继续保持练习节奏，建议每次考试后查看结果详情并处理错题。'
+})
+
+const wrongPracticeSuggestion = computed(() => {
+  if (totalWrongQuestions.value === 0) {
+    return '当前暂无错题，继续保持。'
+  }
+
+  if (topWrongKnowledgePoints.value.length > 0) {
+    return `建议优先练习：${mainWrongKnowledgeText.value}。`
+  }
+
+  return '建议按照错题产生时间，从最新错题开始复习。'
 })
 
 const formatDateTime = (dateValue) => {
@@ -132,11 +276,19 @@ const formatUsedTime = (seconds) => {
   return `${minutes} 分 ${restSeconds} 秒`
 }
 
+const clearWrongFilters = () => {
+  wrongKeyword.value = ''
+  wrongTypeFilter.value = 'ALL'
+  wrongKnowledgeFilter.value = 'ALL'
+  wrongSortType.value = 'NEWEST'
+}
+
 const handleLogout = () => {
   logoutUser()
   currentUser.value = null
   attemptHistory.value = []
   wrongQuestions.value = []
+  clearWrongFilters()
 }
 
 const loadAttemptHistory = async () => {
@@ -435,10 +587,68 @@ onMounted(() => {
 
         <div class="profile-panel">
           <div class="section-title-row">
-            <h2>错题本</h2>
+            <div>
+              <h2>错题本</h2>
+              <p class="section-subtitle">
+                当前显示 {{ filteredWrongQuestions.length }} / {{ wrongQuestions.length }} 道错题
+              </p>
+            </div>
+
             <button class="secondary-btn" @click="loadWrongQuestions">
               刷新
             </button>
+          </div>
+
+          <div v-if="wrongQuestions.length > 0" class="wrong-filter-card">
+            <input
+              v-model="wrongKeyword"
+              class="wrong-filter-input"
+              type="text"
+              placeholder="搜索题干、知识点、解析或试卷"
+            />
+
+            <select v-model="wrongTypeFilter" class="wrong-filter-select">
+              <option value="ALL">全部题型</option>
+              <option
+                v-for="type in uniqueWrongTypes"
+                :key="type"
+                :value="type"
+              >
+                {{ typeNameMap[type] || type }}
+              </option>
+            </select>
+
+            <select v-model="wrongKnowledgeFilter" class="wrong-filter-select">
+              <option value="ALL">全部知识点</option>
+              <option
+                v-for="knowledgePoint in uniqueWrongKnowledgePoints"
+                :key="knowledgePoint"
+                :value="knowledgePoint"
+              >
+                {{ knowledgePoint }}
+              </option>
+            </select>
+
+            <select v-model="wrongSortType" class="wrong-filter-select">
+              <option value="NEWEST">最新错题优先</option>
+              <option value="OLDEST">最早错题优先</option>
+              <option value="KNOWLEDGE_ASC">按知识点排序</option>
+              <option value="TYPE_ASC">按题型排序</option>
+            </select>
+
+            <button
+              v-if="hasWrongFilter"
+              class="secondary-btn"
+              @click="clearWrongFilters"
+            >
+              清空筛选
+            </button>
+          </div>
+
+          <div v-if="wrongQuestions.length > 0" class="wrong-summary-box">
+            <p>
+              {{ wrongPracticeSuggestion }}
+            </p>
           </div>
 
           <div v-if="wrongQuestionErrorMessage" class="api-warning">
@@ -449,14 +659,14 @@ onMounted(() => {
             正在加载错题本……
           </div>
 
-          <div v-else-if="wrongQuestions.length > 0" class="wrong-question-list">
+          <div v-else-if="filteredWrongQuestions.length > 0" class="wrong-question-list">
             <div
-              v-for="item in wrongQuestions"
+              v-for="item in filteredWrongQuestions"
               :key="item.id"
               class="wrong-question-item"
             >
               <p class="tag">
-                {{ item.questionType || '题目' }}
+                {{ typeNameMap[item.questionType] || item.questionType || '题目' }}
               </p>
 
               <h3>{{ item.questionText || '题目内容暂缺' }}</h3>
@@ -496,7 +706,7 @@ onMounted(() => {
           </div>
 
           <p v-else class="empty-text">
-            暂无错题。
+            {{ hasWrongFilter ? '暂无符合筛选条件的错题。' : '暂无错题。' }}
           </p>
         </div>
       </div>

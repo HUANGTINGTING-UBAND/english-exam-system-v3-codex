@@ -2125,3 +2125,68 @@ h1 {
     text-align: left;
   }
 }
+
+.wrong-filter-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(120px, 0.8fr) minmax(140px, 1fr) minmax(140px, 0.8fr) auto;
+  gap: 10px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.wrong-filter-input,
+.wrong-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font: inherit;
+  background: white;
+}
+
+.wrong-summary-box {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f9fafb;
+  color: #374151;
+  line-height: 1.7;
+}
+
+.wrong-summary-box p {
+  margin: 0;
+}
+
+.wrong-practice-tip {
+  margin: 12px 0 20px;
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.wrong-choice-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.wrong-practice-result-card.correct {
+  border-left: 6px solid #22c55e;
+}
+
+.wrong-practice-result-card.wrong {
+  border-left: 6px solid #ef4444;
+}
+
+.wrong-practice-result-suggestion {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f9fafb;
+  color: #374151;
+  line-height: 1.7;
+}
+
+@media (max-width: 980px) {
+  .wrong-filter-card {
+    grid-template-columns: 1fr;
+  }
+}
