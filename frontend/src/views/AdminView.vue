@@ -41,6 +41,8 @@ const selectedQuestionExamId = ref('')
 const selectedQuestionExamTitle = ref('')
 const adminQuestions = ref([])
 const questionTypeFilter = ref('ALL')
+const questionKeyword = ref('')
+const questionSortType = ref('ORDER_ASC')
 const isLoadingQuestions = ref(false)
 
 const editingExamId = ref('')
@@ -153,12 +155,52 @@ const filteredExams = computed(() => {
 })
 
 const filteredAdminQuestions = computed(() => {
-  if (questionTypeFilter.value === 'ALL') {
-    return adminQuestions.value
-  }
+  const keyword = questionKeyword.value.trim().toLowerCase()
 
-  return adminQuestions.value.filter((question) => {
-    return question.type === questionTypeFilter.value
+  const result = adminQuestions.value.filter((question) => {
+    const typeName = typeNameMap[question.type] || question.type || ''
+
+    const text = [
+      question.text,
+      question.knowledgePoint,
+      question.referenceAnswer,
+      question.explanation,
+      question.answer,
+      typeName,
+      question.type,
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    const matchedType =
+      questionTypeFilter.value === 'ALL' ||
+      question.type === questionTypeFilter.value
+
+    const matchedKeyword = !keyword || text.includes(keyword)
+
+    return matchedType && matchedKeyword
+  })
+
+  return [...result].sort((a, b) => {
+    if (questionSortType.value === 'ORDER_DESC') {
+      return Number(b.orderIndex || 0) - Number(a.orderIndex || 0)
+    }
+
+    if (questionSortType.value === 'SCORE_DESC') {
+      return Number(b.score || 0) - Number(a.score || 0)
+    }
+
+    if (questionSortType.value === 'SCORE_ASC') {
+      return Number(a.score || 0) - Number(b.score || 0)
+    }
+
+    if (questionSortType.value === 'TYPE_ASC') {
+      const typeA = typeNameMap[a.type] || a.type || ''
+      const typeB = typeNameMap[b.type] || b.type || ''
+      return typeA.localeCompare(typeB, 'zh-CN')
+    }
+
+    return Number(a.orderIndex || 0) - Number(b.orderIndex || 0)
   })
 })
 
@@ -269,6 +311,79 @@ const clearExamFilters = () => {
   examSortType.value = 'NEWEST'
 }
 
+const clearQuestionFilters = () => {
+  questionTypeFilter.value = 'ALL'
+  questionKeyword.value = ''
+  questionSortType.value = 'ORDER_ASC'
+}
+
+const escapeCsvValue = (value) => {
+  const text = String(value ?? '')
+
+  if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+    return `"${text.replaceAll('"', '""')}"`
+  }
+
+  return text
+}
+
+const exportCurrentQuestionsToCsv = () => {
+  if (!selectedQuestionExamId.value) {
+    window.alert('请先选择一张试卷并查看题目。')
+    return
+  }
+
+  if (filteredAdminQuestions.value.length === 0) {
+    window.alert('当前没有可导出的题目。')
+    return
+  }
+
+  const headers = [
+    '题号',
+    '题型',
+    '题干',
+    '选项',
+    '答案',
+    '分值',
+    '知识点',
+    '参考答案',
+    '解析',
+  ]
+
+  const rows = filteredAdminQuestions.value.map((question) => [
+    question.orderIndex ?? '',
+    typeNameMap[question.type] || question.type || '',
+    question.text || '',
+    Array.isArray(question.options) ? question.options.join(' / ') : '',
+    formatAnswer(question),
+    question.score ?? '',
+    question.knowledgePoint || '',
+    question.referenceAnswer || '',
+    question.explanation || '',
+  ])
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map(escapeCsvValue).join(','))
+    .join('\n')
+
+  const blob = new Blob([`\uFEFF${csvContent}`], {
+    type: 'text/csv;charset=utf-8;',
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const safeTitle = String(selectedQuestionExamTitle.value || '试卷题目')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .slice(0, 40)
+  const timestamp = new Date().toISOString().slice(0, 19).replaceAll(':', '-')
+
+  link.href = url
+  link.download = `${safeTitle}-题目导出-${timestamp}.csv`
+  link.click()
+
+  URL.revokeObjectURL(url)
+}
+
 const loadAdminExams = async () => {
   if (!isAdmin.value) {
     return
@@ -296,7 +411,7 @@ const loadAdminExams = async () => {
       selectedQuestionExamId.value = ''
       selectedQuestionExamTitle.value = ''
       adminQuestions.value = []
-      questionTypeFilter.value = 'ALL'
+      clearQuestionFilters()
     }
   } catch (error) {
     console.error(error)
@@ -446,7 +561,7 @@ const handleDeleteExam = async (exam) => {
       selectedQuestionExamId.value = ''
       selectedQuestionExamTitle.value = ''
       adminQuestions.value = []
-      questionTypeFilter.value = 'ALL'
+      clearQuestionFilters()
     }
 
     if (editingExamId.value === exam.id) {
@@ -572,7 +687,7 @@ const handleLoadQuestions = async (exam) => {
   selectedQuestionExamId.value = exam.id
   selectedQuestionExamTitle.value = exam.title
   editingQuestionId.value = ''
-  questionTypeFilter.value = 'ALL'
+  clearQuestionFilters()
   await handleLoadQuestionsByExamId(exam.id)
 }
 
@@ -1093,6 +1208,13 @@ onMounted(() => {
           </div>
 
           <div class="admin-exam-search-actions">
+            <input
+              v-model="questionKeyword"
+              class="admin-exam-search-input"
+              type="text"
+              placeholder="搜索题干、知识点、解析或答案"
+            />
+
             <select
               v-model="questionTypeFilter"
               class="admin-exam-grade-select"
@@ -1106,12 +1228,30 @@ onMounted(() => {
               <option value="CLOZE">完形填空</option>
             </select>
 
+            <select
+              v-model="questionSortType"
+              class="admin-exam-grade-select"
+            >
+              <option value="ORDER_ASC">题号从小到大</option>
+              <option value="ORDER_DESC">题号从大到小</option>
+              <option value="SCORE_DESC">分值高到低</option>
+              <option value="SCORE_ASC">分值低到高</option>
+              <option value="TYPE_ASC">题型排序</option>
+            </select>
+
             <button
-              v-if="questionTypeFilter !== 'ALL'"
+              v-if="questionTypeFilter !== 'ALL' || questionKeyword || questionSortType !== 'ORDER_ASC'"
               class="secondary-btn"
-              @click="questionTypeFilter = 'ALL'"
+              @click="clearQuestionFilters"
             >
               清空筛选
+            </button>
+
+            <button
+              class="secondary-btn"
+              @click="exportCurrentQuestionsToCsv"
+            >
+              导出题目 CSV
             </button>
 
             <button
@@ -1245,7 +1385,7 @@ onMounted(() => {
         </div>
 
         <p v-else class="empty-text">
-          {{ questionTypeFilter === 'ALL' ? '当前试卷暂无题目。' : '当前筛选条件下暂无题目。' }}
+          {{ questionTypeFilter === 'ALL' && !questionKeyword ? '当前试卷暂无题目。' : '当前筛选条件下暂无题目。' }}
         </p>
       </div>
     </section>
