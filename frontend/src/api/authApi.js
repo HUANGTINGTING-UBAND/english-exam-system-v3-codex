@@ -1,6 +1,23 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
-const parseResponse = async (response) => {
+export const clearAuthData = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('currentUser')
+}
+
+export const notifyAuthExpired = (message = '登录状态已过期，请重新登录') => {
+  clearAuthData()
+
+  window.dispatchEvent(
+    new CustomEvent('auth-expired', {
+      detail: {
+        message,
+      },
+    })
+  )
+}
+
+const parseResponse = async (response, defaultErrorMessage = '请求失败') => {
   const contentType = response.headers.get('content-type') || ''
 
   if (!contentType.includes('application/json')) {
@@ -13,7 +30,13 @@ const parseResponse = async (response) => {
   const result = await response.json()
 
   if (!response.ok) {
-    throw new Error(result.message || '请求失败')
+    const message = result.message || defaultErrorMessage
+
+    if (response.status === 401) {
+      notifyAuthExpired(message || '登录状态已过期，请重新登录')
+    }
+
+    throw new Error(message)
   }
 
   return result.data
@@ -28,7 +51,7 @@ export const registerUser = async (userData) => {
     body: JSON.stringify(userData),
   })
 
-  return parseResponse(response)
+  return parseResponse(response, '注册失败')
 }
 
 export const loginUser = async (loginData) => {
@@ -40,7 +63,7 @@ export const loginUser = async (loginData) => {
     body: JSON.stringify(loginData),
   })
 
-  return parseResponse(response)
+  return parseResponse(response, '登录失败')
 }
 
 export const getCurrentUser = async () => {
@@ -56,7 +79,7 @@ export const getCurrentUser = async () => {
     },
   })
 
-  return parseResponse(response)
+  return parseResponse(response, '获取当前用户失败')
 }
 
 export const saveAuthData = ({ token, user }) => {
@@ -65,10 +88,15 @@ export const saveAuthData = ({ token, user }) => {
 }
 
 export const getSavedUser = () => {
-  return JSON.parse(localStorage.getItem('currentUser') || 'null')
+  try {
+    return JSON.parse(localStorage.getItem('currentUser') || 'null')
+  } catch (error) {
+    console.error('Parse saved user error:', error)
+    clearAuthData()
+    return null
+  }
 }
 
 export const logoutUser = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('currentUser')
+  clearAuthData()
 }

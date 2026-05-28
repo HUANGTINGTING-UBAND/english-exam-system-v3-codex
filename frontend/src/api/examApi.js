@@ -1,3 +1,5 @@
+import { notifyAuthExpired } from './authApi'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const getAuthHeaders = () => {
@@ -25,7 +27,17 @@ const parseResponse = async (response, defaultErrorMessage) => {
   const result = await response.json()
 
   if (!response.ok) {
-    throw new Error(result.message || defaultErrorMessage || '请求失败')
+    const message = result.message || defaultErrorMessage || '请求失败'
+
+    if (response.status === 401) {
+      notifyAuthExpired(message || '登录状态已过期，请重新登录')
+    }
+
+    if (response.status === 403) {
+      throw new Error(message || '你没有权限执行该操作')
+    }
+
+    throw new Error(message)
   }
 
   return result.data
