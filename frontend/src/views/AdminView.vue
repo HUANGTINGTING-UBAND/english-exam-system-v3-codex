@@ -24,6 +24,7 @@ const isAdmin = computed(() => {
 const exams = ref([])
 const examKeyword = ref('')
 const examGradeFilter = ref('ALL')
+const examSortType = ref('NEWEST')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -96,7 +97,7 @@ const typeNameMap = {
 const filteredExams = computed(() => {
   const keyword = examKeyword.value.trim().toLowerCase()
 
-  return exams.value.filter((exam) => {
+  const result = exams.value.filter((exam) => {
     const gradeName = gradeNameMap[exam.gradeLevel] || exam.gradeLevel || ''
 
     const text = [
@@ -115,6 +116,38 @@ const filteredExams = computed(() => {
       exam.gradeLevel === examGradeFilter.value
 
     return matchedKeyword && matchedGrade
+  })
+
+  return [...result].sort((a, b) => {
+    if (examSortType.value === 'OLDEST') {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    }
+
+    if (examSortType.value === 'QUESTION_DESC') {
+      return Number(b.questionCount || 0) - Number(a.questionCount || 0)
+    }
+
+    if (examSortType.value === 'QUESTION_ASC') {
+      return Number(a.questionCount || 0) - Number(b.questionCount || 0)
+    }
+
+    if (examSortType.value === 'SCORE_DESC') {
+      return Number(b.totalScore || 0) - Number(a.totalScore || 0)
+    }
+
+    if (examSortType.value === 'SCORE_ASC') {
+      return Number(a.totalScore || 0) - Number(b.totalScore || 0)
+    }
+
+    if (examSortType.value === 'PUBLISHED_FIRST') {
+      return Number(b.isPublished) - Number(a.isPublished)
+    }
+
+    if (examSortType.value === 'UNPUBLISHED_FIRST') {
+      return Number(a.isPublished) - Number(b.isPublished)
+    }
+
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 })
 
@@ -222,6 +255,7 @@ const optionsTextToArray = (optionsText) => {
 const clearExamFilters = () => {
   examKeyword.value = ''
   examGradeFilter.value = 'ALL'
+  examSortType.value = 'NEWEST'
 }
 
 const loadAdminExams = async () => {
@@ -900,8 +934,22 @@ onMounted(() => {
         <option value="COLLEGE">大学</option>
       </select>
 
+      <select
+        v-model="examSortType"
+        class="admin-exam-grade-select"
+      >
+      <option value="NEWEST">最新创建优先</option>
+      <option value="OLDEST">最早创建优先</option>
+      <option value="QUESTION_DESC">题目数量多到少</option>
+      <option value="QUESTION_ASC">题目数量少到多</option>
+      <option value="SCORE_DESC">满分高到低</option>
+      <option value="SCORE_ASC">满分低到高</option>
+      <option value="PUBLISHED_FIRST">已发布优先</option>
+      <option value="UNPUBLISHED_FIRST">未发布优先</option>
+      </select>
+
       <button
-        v-if="examKeyword || examGradeFilter !== 'ALL'"
+        v-if="examKeyword || examGradeFilter !== 'ALL'|| examSortType !== 'NEWEST'"
         class="secondary-btn"
         @click="clearExamFilters"
       >
@@ -1015,7 +1063,7 @@ onMounted(() => {
         </div>
 
         <p v-else class="empty-text">
-          {{ examKeyword || examGradeFilter !== 'ALL' ? '暂无符合筛选条件的试卷。' : '暂无试卷。' }}
+          {{ examKeyword || examGradeFilter !== 'ALL' || examSortType !== 'NEWEST' ? '暂无符合筛选条件的试卷。' : '暂无试卷。' }}
         </p>
       </div>
 
