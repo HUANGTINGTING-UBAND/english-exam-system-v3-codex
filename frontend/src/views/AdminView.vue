@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getSavedUser } from '../api/authApi'
+import { examCategoryNameMap, examCategoryOptions } from '../utils/examCategories'
 import {
   createAdminExam,
   deleteAdminExam,
@@ -81,12 +82,7 @@ const editQuestionForm = ref({
   orderIndex: 1,
 })
 
-const gradeNameMap = {
-  PRIMARY: '小学',
-  JUNIOR: '初中',
-  SENIOR: '高中',
-  COLLEGE: '大学',
-}
+const gradeNameMap = examCategoryNameMap
 
 const typeNameMap = {
   CHOICE: '单选题',
@@ -890,12 +886,21 @@ onMounted(() => {
           </label>
 
           <label>
-            学段
+            试卷分类
             <select v-model="form.gradeLevel">
-              <option value="PRIMARY">小学</option>
-              <option value="JUNIOR">初中</option>
-              <option value="SENIOR">高中</option>
-              <option value="COLLEGE">大学</option>
+              <optgroup
+                v-for="group in examCategoryOptions"
+                :key="group.group"
+                :label="group.group"
+              >
+                <option
+                  v-for="option in group.options"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </optgroup>
             </select>
           </label>
 
@@ -1051,18 +1056,27 @@ onMounted(() => {
               v-model="examKeyword"
               class="admin-exam-search-input"
               type="text"
-              placeholder="搜索试卷标题、说明或学段"
+              placeholder="搜索试卷标题、说明或分类"
             />
 
             <select
               v-model="examGradeFilter"
               class="admin-exam-grade-select"
             >
-              <option value="ALL">全部学段</option>
-              <option value="PRIMARY">小学</option>
-              <option value="JUNIOR">初中</option>
-              <option value="SENIOR">高中</option>
-              <option value="COLLEGE">大学</option>
+              <option value="ALL">全部试卷分类</option>
+              <optgroup
+                v-for="group in examCategoryOptions"
+                :key="group.group"
+                :label="group.group"
+              >
+                <option
+                  v-for="option in group.options"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </optgroup>
             </select>
 
             <select
@@ -1114,7 +1128,7 @@ onMounted(() => {
                   </label>
 
                   <label>
-                    学段
+                    试卷分类
                     <select v-model="editExamForm.gradeLevel">
                       <option value="PRIMARY">小学</option>
                       <option value="JUNIOR">初中</option>
@@ -1163,7 +1177,7 @@ onMounted(() => {
                 <p>{{ exam.description || '暂无说明' }}</p>
 
                 <div class="admin-exam-meta">
-                  <span>学段：{{ gradeNameMap[exam.gradeLevel] || exam.gradeLevel }}</span>
+                  <span>分类：{{ gradeNameMap[exam.gradeLevel] || exam.gradeLevel }}</span>
                   <span>题目：{{ exam.questionCount }} 题</span>
                   <span>满分：{{ exam.totalScore }} 分</span>
                   <span>时长：{{ formatTimeLimit(exam.timeLimit) }}</span>

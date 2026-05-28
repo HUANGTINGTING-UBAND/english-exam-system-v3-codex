@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getSavedUser } from '../api/authApi'
+import { examCategoryNameMap, examCategoryOptions } from '../utils/examCategories'
 import { getAdminAttempts } from '../api/examApi'
 
 const currentUser = ref(getSavedUser())
@@ -17,12 +18,7 @@ const isAdmin = computed(() => {
   return currentUser.value?.role === 'ADMIN'
 })
 
-const gradeNameMap = {
-  PRIMARY: '小学',
-  JUNIOR: '初中',
-  SENIOR: '高中',
-  COLLEGE: '大学',
-}
+const gradeNameMap = examCategoryNameMap
 
 const filteredAttempts = computed(() => {
   return attempts.value.filter((attempt) => {
@@ -130,9 +126,9 @@ const exportFilteredAttemptsToCsv = () => {
   const headers = [
     '学生昵称',
     '用户名',
-    '学生学段',
+    '学生分类',
     '试卷标题',
-    '试卷学段',
+    '试卷分类',
     '得分',
     '满分',
     '得分率',
@@ -268,13 +264,22 @@ onMounted(() => {
           </label>
 
           <label>
-            学段筛选
+            试卷分类筛选
             <select v-model="gradeFilter">
-              <option value="ALL">全部学段</option>
-              <option value="PRIMARY">小学</option>
-              <option value="JUNIOR">初中</option>
-              <option value="SENIOR">高中</option>
-              <option value="COLLEGE">大学</option>
+              <option value="ALL">全部分类</option>
+              <optgroup
+                v-for="group in examCategoryOptions"
+                :key="group.group"
+                :label="group.group"
+              >
+                <option
+                  v-for="option in group.options"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </optgroup>
             </select>
           </label>
         </div>
@@ -348,7 +353,7 @@ onMounted(() => {
 
               <td>
                 <strong>{{ attempt.examTitle }}</strong>
-                <p>{{ gradeNameMap[attempt.examGradeLevel] || attempt.examGradeLevel || '未知学段' }}</p>
+                <p>{{ gradeNameMap[attempt.examGradeLevel] || attempt.examGradeLevel || '未知分类' }}</p>
               </td>
 
               <td>

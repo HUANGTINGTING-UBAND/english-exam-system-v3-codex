@@ -1,8 +1,15 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { getExams } from '../api/examApi'
 import { mockExams } from '../data/mockExams'
+import {
+  examCategoryGroups,
+  examCategoryNameMap,
+  examGroupNameMap,
+  getExamCategoryName,
+  getExamGroupName,
+} from '../utils/examCategories'
 
 const route = useRoute()
 
@@ -11,51 +18,55 @@ const isLoading = ref(false)
 const errorMessage = ref('')
 
 const grade = computed(() => route.query.grade || '')
+const group = computed(() => route.query.group || '')
 
-const gradeNameMap = {
-  primary: '小学',
-  junior: '初中',
-  senior: '高中',
-  college: '大学',
-  PRIMARY: '小学',
-  JUNIOR: '初中',
-  SENIOR: '高中',
-  COLLEGE: '大学',
-}
-
-const currentGradeName = computed(() => {
-  if (!grade.value) {
-    return '全部学段'
+const currentCategoryName = computed(() => {
+  if (grade.value) {
+    return getExamCategoryName(String(grade.value).toUpperCase())
   }
 
-  return gradeNameMap[grade.value] || '未知学段'
+  if (group.value) {
+    return getExamGroupName(String(group.value).toUpperCase())
+  }
+
+  return '全部试卷'
 })
 
-const normalizeGradeForApi = (gradeValue) => {
-  if (!gradeValue) {
+const normalizeValue = (value) => {
+  if (!value) {
     return ''
   }
 
-  return String(gradeValue).toUpperCase()
+  return String(value).toUpperCase()
 }
 
-const normalizeGradeForMock = (gradeValue) => {
-  if (!gradeValue) {
-    return ''
-  }
+const getGradesByGroup = (groupValue) => {
+  const normalizedGroup = normalizeValue(groupValue)
+  const matchedGroup = examCategoryGroups.find((item) => item.key === normalizedGroup)
 
-  return String(gradeValue).toLowerCase()
+  return matchedGroup?.grades || []
 }
 
 const fallbackToMockExams = () => {
-  const mockGrade = normalizeGradeForMock(grade.value)
+  const currentGrade = normalizeValue(grade.value)
+  const currentGroup = normalizeValue(group.value)
+  const groupGrades = getGradesByGroup(currentGroup)
 
-  if (!mockGrade) {
-    exams.value = mockExams
+  if (currentGrade) {
+    exams.value = mockExams.filter((exam) => {
+      return normalizeValue(exam.gradeLevel) === currentGrade
+    })
     return
   }
 
-  exams.value = mockExams.filter((exam) => exam.gradeLevel === mockGrade)
+  if (groupGrades.length > 0) {
+    exams.value = mockExams.filter((exam) => {
+      return groupGrades.includes(normalizeValue(exam.gradeLevel))
+    })
+    return
+  }
+
+  exams.value = mockExams
 }
 
 const loadExams = async () => {
@@ -63,8 +74,10 @@ const loadExams = async () => {
   errorMessage.value = ''
 
   try {
-    const apiGrade = normalizeGradeForApi(grade.value)
-    exams.value = await getExams(apiGrade)
+    exams.value = await getExams({
+      grade: normalizeValue(grade.value),
+      group: normalizeValue(group.value),
+    })
   } catch (error) {
     console.error(error)
     errorMessage.value = '后端接口暂时不可用，当前显示本地 mock 试卷数据。'
@@ -75,8 +88,15 @@ const loadExams = async () => {
 }
 
 const formatTimeLimit = (seconds) => {
-  return Math.round(seconds / 60)
+  return Math.round(Number(seconds || 0) / 60)
 }
+
+watch(
+  () => route.fullPath,
+  () => {
+    loadExams()
+  }
+)
 
 onMounted(() => {
   loadExams()
@@ -87,10 +107,25 @@ onMounted(() => {
   <div class="exam-list-page">
     <div class="page-header">
       <p class="tag">Exam List</p>
-      <h1>{{ currentGradeName }}试卷列表</h1>
+      <h1>{{ currentCategoryName }}列表</h1>
       <p class="desc">
-        请选择一张试卷开始练习。当前页面优先读取后端数据库数据，如果后端未启动，则使用本地备用数据。
+        请选择一张试卷开始练习。你可以按考试方向或具体分类查看试卷。
       </p>
+    </div>
+
+    <div class="exam-category-nav">
+      <RouterLink class="secondary-btn" to="/exams">
+        全部试卷
+      </RouterLink>
+
+      <RouterLink
+        v-for="item in examCategoryGroups"
+        :key="item.key"
+        class="secondary-btn"
+        :to="`/exams?group=${item.key}`"
+      >
+        {{ item.name }}
+      </RouterLink>
     </div>
 
     <div v-if="errorMessage" class="api-warning">
@@ -107,6 +142,10 @@ onMounted(() => {
         :key="exam.id"
         class="exam-card"
       >
+        <p class="tag">
+          {{ examCategoryNameMap[exam.gradeLevel] || exam.gradeLevel || '未分类' }}
+        </p>
+
         <h2>{{ exam.title }}</h2>
         <p>{{ exam.description }}</p>
 
@@ -127,7 +166,7 @@ onMounted(() => {
 
     <div v-else class="empty-card">
       <h2>暂无试卷</h2>
-      <p>当前学段暂时没有可用试卷。</p>
+      <p>当前分类暂时没有可用试卷。</p>
       <RouterLink class="secondary-btn" to="/">
         返回首页
       </RouterLink>

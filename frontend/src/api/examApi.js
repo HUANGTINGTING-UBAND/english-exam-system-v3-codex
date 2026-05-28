@@ -43,9 +43,25 @@ const parseResponse = async (response, defaultErrorMessage) => {
   return result.data
 }
 
-export const getExams = async (grade) => {
-  const query = grade ? `?grade=${grade}` : ''
-  const response = await fetch(`${API_BASE_URL}/exams${query}`)
+export const getExams = async (params = {}) => {
+  const searchParams = new URLSearchParams()
+
+  if (typeof params === 'string') {
+    if (params) {
+      searchParams.set('grade', params)
+    }
+  } else {
+    if (params.group) {
+      searchParams.set('group', params.group)
+    }
+
+    if (params.grade) {
+      searchParams.set('grade', params.grade)
+    }
+  }
+
+  const query = searchParams.toString()
+  const response = await fetch(`${API_BASE_URL}/exams${query ? `?${query}` : ''}`)
 
   return parseResponse(response, '获取试卷列表失败')
 }

@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getSavedUser, logoutUser } from '../api/authApi'
+import { examCategoryGroups, examCategoryOptions } from '../utils/examCategories'
 
 const currentUser = ref(null)
 
@@ -69,12 +70,12 @@ onMounted(() => {
         <h1>英语在线模拟考试与错题学习系统</h1>
 
         <p class="desc">
-          支持在线考试、自动评分、结果分析、薄弱知识点定位、错题本沉淀和管理员试卷管理，帮助学生形成完整学习闭环。
+          支持 K12 校内英语、大学英语、出国英语考试和其他英语考试分类练习，结合在线考试、结果分析、错题重练和管理员试卷管理，帮助学生形成完整学习闭环。
         </p>
 
         <div class="actions">
           <RouterLink class="primary-btn" to="/exams">
-            开始练习
+            查看全部试卷
           </RouterLink>
 
           <RouterLink class="secondary-btn" to="/profile">
@@ -104,8 +105,8 @@ onMounted(() => {
         <div class="home-flow-grid">
           <div class="home-flow-card">
             <span>01</span>
-            <h3>选择试卷</h3>
-            <p>按小学、初中、高中、大学等学段选择适合自己的英语试卷。</p>
+            <h3>选择方向</h3>
+            <p>按 K12、大学英语、出国考试、其他考试等方向选择试卷。</p>
           </div>
 
           <div class="home-flow-card">
@@ -131,38 +132,40 @@ onMounted(() => {
       <section class="home-feature-section">
         <div class="section-title-row">
           <div>
-            <p class="tag">Grade Practice</p>
-            <h2>选择学段开始练习</h2>
+            <p class="tag">Exam Categories</p>
+            <h2>选择考试方向开始练习</h2>
           </div>
         </div>
 
         <div class="grade-grid">
-          <div class="grade-card">
-            <RouterLink class="grade-title-link" to="/exams?grade=primary">
-              小学
+          <div
+            v-for="group in examCategoryGroups"
+            :key="group.key"
+            class="grade-card"
+          >
+            <RouterLink
+              class="grade-title-link"
+              :to="`/exams?group=${group.key}`"
+            >
+              {{ group.name }}
             </RouterLink>
-            <p>适合小学英语基础练习，巩固词汇、句型和基础语法。</p>
-          </div>
 
-          <div class="grade-card">
-            <RouterLink class="grade-title-link" to="/exams?grade=junior">
-              初中
-            </RouterLink>
-            <p>适合中考英语模拟训练，强化语法、阅读和综合运用能力。</p>
-          </div>
+            <p>{{ group.description }}</p>
 
-          <div class="grade-card">
-            <RouterLink class="grade-title-link" to="/exams?grade=senior">
-              高中
-            </RouterLink>
-            <p>适合高考英语综合训练，提升阅读理解、写作和语言运用能力。</p>
-          </div>
-
-          <div class="grade-card">
-            <RouterLink class="grade-title-link" to="/exams?grade=college">
-              大学
-            </RouterLink>
-            <p>适合大学英语与四六级基础训练，支持更综合的题型练习。</p>
+            <div class="home-category-sub-links">
+              <template
+                v-for="categoryGroup in examCategoryOptions"
+                :key="categoryGroup.group"
+              >
+                <RouterLink
+                  v-for="option in categoryGroup.options.filter((item) => group.grades.includes(item.value))"
+                  :key="option.value"
+                  :to="`/exams?grade=${option.value}`"
+                >
+                  {{ option.label }}
+                </RouterLink>
+              </template>
+            </div>
           </div>
         </div>
       </section>
@@ -198,9 +201,9 @@ onMounted(() => {
           </div>
 
           <div class="home-module-card">
-            <h3>权限保护</h3>
+            <h3>分类管理</h3>
             <p>
-              支持登录状态保存、路由守卫、管理员权限控制和登录过期处理。
+              支持 K12、大学英语、出国英语考试、其他考试和综合练习等分类管理。
             </p>
           </div>
         </div>
