@@ -13,51 +13,6 @@ const upload = multer({
   },
 })
 
-const examImportPresets = {
-  CET4: {
-    name: '大学英语四级',
-    timeLimit: 7500,
-    totalScore: 710,
-    getScore(question) {
-      const orderIndex = Number(question.orderIndex || 0)
-
-      if (orderIndex === 1) {
-        return 106.5
-      }
-
-      if (orderIndex >= 2 && orderIndex <= 8) {
-        return 7.1
-      }
-
-      if (orderIndex >= 9 && orderIndex <= 16) {
-        return 7.1
-      }
-
-      if (orderIndex >= 17 && orderIndex <= 26) {
-        return 14.2
-      }
-
-      if (orderIndex >= 27 && orderIndex <= 36) {
-        return 3.55
-      }
-
-      if (orderIndex >= 37 && orderIndex <= 46) {
-        return 7.1
-      }
-
-      if (orderIndex >= 47 && orderIndex <= 56) {
-        return 14.2
-      }
-
-      if (orderIndex === 57) {
-        return 106.5
-      }
-
-      return 0
-    },
-  },
-}
-
 const getExamImportPreset = (gradeLevel) => {
   const key = String(gradeLevel || '').trim().toUpperCase()
 
@@ -248,6 +203,319 @@ const normalizeParsedQuestions = (questions) => {
 const getFieldValue = (block, fieldNames) => {
   const names = Array.isArray(fieldNames) ? fieldNames : [fieldNames]
   const escapedNames = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+  const labelPattern = escapedNames.join('|')
+  const nextLabelPattern =
+    '题号|题型|题干|选项|答案|参考答案|解析|知识点|分值'
+
+  const regex = new RegExp(
+    `(?:${labelPattern})\\s*[:：]\\s*([\\s\\S]*?)(?=\\n(?:${nextLabelPattern})\\s*[:：]|$)`,
+    'i'
+  )
+
+  const match = block.match(regex)
+
+  return match ? match[1].trim() : ''
+}
+
+const parseOptionsFromText = (optionsText) => {
+  const lines = String(optionsText || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  const options = []
+  let currentOption = ''
+
+  for (const line of lines) {
+    const optionMatch = line.match(/^([A-O])[\.\、．\)]\s*(.*)$/i)
+
+    if (optionMatch) {
+      if (currentOption) {
+        options.push(currentOption.trim())
+      }
+
+      currentOption = optionMatch[2].trim()
+    } else if (currentOption) {
+      currentOption += ` ${line}`
+    }
+  }
+
+  if (currentOption) {
+    options.push(currentOption.trim())
+  }
+
+  return options.filter(Boolean)
+}
+
+const parseQuestionsFromText = (rawText) => {
+  const text = String(rawText || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\u00A0/g, ' ')
+    .trim()
+
+  if (!text) {
+    return []
+  }
+
+  const blocks = text
+    .split(/(?=\n?题号\s*[:：]\s*\d+)/g)
+    .map((block) => block.trim())
+    .filter((block) => /^题号\s*[:：]\s*\d+/m.test(block))
+
+  const questions = blocks.map((block, index) => {
+    const orderIndexText = getFieldValue(block, '题号')
+    const type = getFieldValue(block, '题型') || '单选题'
+    const text = getFieldValue(block, '题干')
+    const optionsText = getFieldValue(block, '选项')
+    const answer = getFieldValue(block, ['答案', '参考答案'])
+    const referenceAnswer = getFieldValue(block, '参考答案')
+    const explanation = getFieldValue(block, '解析')
+    const knowledgePoint = getFieldValue(block, '知识点')
+    const scoreText = getFieldValue(block, '分值')
+
+    const options = parseOptionsFromText(optionsText)
+
+    return {
+      type,
+      text,
+      options,
+      answer,
+      score: Number(scoreText || 0),
+      knowledgePoint: knowledgePoint || '未分类',
+      referenceAnswer,
+      explanation,
+      orderIndex: Number(orderIndexText || index + 1),
+    }
+  })
+
+  return normalizeParsedQuestions(questions)
+}
+
+const examImportPresets = {
+  CET4: {
+    name: '大学英语四级',
+    timeLimit: 7500,
+    totalScore: 710,
+    getScore(question) {
+      const orderIndex = Number(question.orderIndex || 0)
+
+      if (orderIndex === 1) return 106.5
+      if (orderIndex >= 2 && orderIndex <= 8) return 7.1
+      if (orderIndex >= 9 && orderIndex <= 16) return 7.1
+      if (orderIndex >= 17 && orderIndex <= 26) return 14.2
+      if (orderIndex >= 27 && orderIndex <= 36) return 3.55
+      if (orderIndex >= 37 && orderIndex <= 46) return 7.1
+      if (orderIndex >= 47 && orderIndex <= 56) return 14.2
+      if (orderIndex === 57) return 106.5
+
+      return 0
+    },
+  },
+}
+
+const getExamImportPreset = (gradeLevel) => {
+  const key = String(gradeLevel || '').trim().toUpperCase()
+  return examImportPresets[key] || null
+}
+
+const applyExamImportPreset = (questions, preset) => {
+  if (!Array.isArray(questions)) {
+    return []
+  }
+
+  return questions.map((question) => {
+    const currentScore = Number(question.score || 0)
+
+    if (currentScore > 0) {
+      return {
+        ...question,
+        score: currentScore,
+      }
+    }
+
+    const presetScore = preset?.getScore
+      ? Number(preset.getScore(question) || 0)
+      : 0
+
+    return {
+      ...question,
+      score: presetScore,
+    }
+  })
+}
+
+const calculateQuestionTotalScore = (questions) => {
+  return questions.reduce((sum, question) => {
+    return sum + Number(question.score || 0)
+  }, 0)
+}
+
+const normalizeQuestionType = (type) => {
+  const typeText = String(type || '').trim().toUpperCase()
+  const rawText = String(type || '').trim()
+
+  const typeMap = {
+    CHOICE: 'CHOICE',
+    SINGLE_CHOICE: 'CHOICE',
+    单选题: 'CHOICE',
+    选择题: 'CHOICE',
+    听力选择题: 'CHOICE',
+    阅读选择题: 'CHOICE',
+    仔细阅读: 'CHOICE',
+    长篇阅读: 'CHOICE',
+    段落匹配: 'CHOICE',
+    选词填空: 'CHOICE',
+    完形填空选择题: 'CHOICE',
+    READING: 'CHOICE',
+    阅读理解: 'CHOICE',
+    CLOZE: 'CHOICE',
+    完形填空: 'CHOICE',
+
+    TRANSLATION: 'TRANSLATION',
+    翻译题: 'TRANSLATION',
+
+    ERROR_CORRECTION: 'ERROR_CORRECTION',
+    改错题: 'ERROR_CORRECTION',
+
+    WRITING: 'WRITING',
+    写作题: 'WRITING',
+  }
+
+  return typeMap[typeText] || typeMap[rawText] || 'CHOICE'
+}
+
+const normalizeChoiceAnswer = (answer) => {
+  if (answer === null || answer === undefined || answer === '') {
+    return null
+  }
+
+  if (typeof answer === 'number') {
+    return answer
+  }
+
+  const text = String(answer).trim().toUpperCase()
+
+  const letterMap = {
+    A: 0,
+    B: 1,
+    C: 2,
+    D: 3,
+    E: 4,
+    F: 5,
+    G: 6,
+    H: 7,
+    I: 8,
+    J: 9,
+    K: 10,
+    L: 11,
+    M: 12,
+    N: 13,
+    O: 14,
+  }
+
+  if (letterMap[text] !== undefined) {
+    return letterMap[text]
+  }
+
+  const numberValue = Number(text)
+
+  if (!Number.isNaN(numberValue)) {
+    return numberValue
+  }
+
+  return null
+}
+
+const normalizeOptions = (options) => {
+  if (Array.isArray(options)) {
+    return options
+      .map((option) => String(option || '').trim())
+      .filter(Boolean)
+      .map((option) => option.replace(/^[A-O][\.．、\)]\s*/i, '').trim())
+      .filter(Boolean)
+  }
+
+  if (typeof options === 'string') {
+    return options
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.replace(/^[A-O][\.．、\)]\s*/i, '').trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+const normalizeParsedQuestions = (questions) => {
+  if (!Array.isArray(questions)) {
+    return []
+  }
+
+  const normalized = questions
+    .map((question, index) => {
+      const finalType = normalizeQuestionType(question.type)
+      const options = normalizeOptions(question.options)
+      const hasOptions = options.length > 0
+
+      return {
+        type: hasOptions ? 'CHOICE' : finalType,
+        text: String(question.text || '').trim(),
+        options: hasOptions ? options : null,
+        answer: hasOptions
+          ? normalizeChoiceAnswer(question.answer)
+          : question.answer === undefined || question.answer === null
+            ? null
+            : String(question.answer).trim(),
+        score: Number(question.score || 0),
+        knowledgePoint: String(question.knowledgePoint || '未分类').trim(),
+        referenceAnswer: String(question.referenceAnswer || '').trim(),
+        explanation: String(question.explanation || '').trim(),
+        orderIndex: Number(question.orderIndex || index + 1),
+      }
+    })
+    .filter((question) => {
+      if (!question.text) return false
+
+      const text = question.text.trim().toUpperCase()
+
+      const invalidStarts = [
+        '说明',
+        '题型标题',
+        'PART I',
+        'PART II',
+        'PART III',
+        'PART IV',
+        'SECTION A',
+        'SECTION B',
+        'SECTION C',
+        'DIRECTIONS',
+        'READING COMPREHENSION',
+        'LISTENING COMPREHENSION',
+      ]
+
+      return !invalidStarts.some((item) => text.startsWith(item))
+    })
+
+  const seen = new Set()
+
+  return normalized.filter((question) => {
+    if (seen.has(question.orderIndex)) {
+      return false
+    }
+
+    seen.add(question.orderIndex)
+    return true
+  })
+}
+
+const getFieldValue = (block, fieldNames) => {
+  const names = Array.isArray(fieldNames) ? fieldNames : [fieldNames]
+  const escapedNames = names.map((name) => {
+    return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  })
 
   const labelPattern = escapedNames.join('|')
   const nextLabelPattern =
@@ -995,58 +1263,6 @@ ${String(rawText).trim()}
   }
 })
 
-router.post('/admin/import/parse-file', requireAdmin, upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        message: '请上传 .txt 或 .docx 文件',
-      })
-    }
-
-    const originalName = req.file.originalname || ''
-    const lowerName = originalName.toLowerCase()
-    let rawText = ''
-
-    if (lowerName.endsWith('.txt')) {
-      rawText = await fs.readFile(req.file.path, 'utf-8')
-    } else if (lowerName.endsWith('.docx')) {
-      const result = await mammoth.extractRawText({
-        path: req.file.path,
-      })
-
-      rawText = result.value || ''
-    } else {
-      return res.status(400).json({
-        message: '只支持上传 .txt 或 .docx 文件',
-      })
-    }
-
-    const questions = parseQuestionsFromText(rawText)
-
-    await fs.unlink(req.file.path).catch(() => {})
-
-    res.json({
-      message: '文件解析成功',
-      data: {
-        fileName: originalName,
-        questionCount: questions.length,
-        questions,
-      },
-    })
-  } catch (error) {
-    console.error('Parse question file error:', error)
-
-    if (req.file?.path) {
-      await fs.unlink(req.file.path).catch(() => {})
-    }
-
-    res.status(500).json({
-      message: '文件解析失败',
-      error: error.message,
-    })
-  }
-})
-
 router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, res) => {
   try {
     const { examId } = req.params
@@ -1064,7 +1280,9 @@ router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, r
       })
     }
 
-    const finalQuestions = normalizeParsedQuestions(questions)
+    const normalizedQuestions = normalizeParsedQuestions(questions)
+    const preset = getExamImportPreset(exam.gradeLevel)
+    const finalQuestions = applyExamImportPreset(normalizedQuestions, preset)
 
     if (finalQuestions.length === 0) {
       return res.status(400).json({
@@ -1072,32 +1290,22 @@ router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, r
       })
     }
 
-    const finalQuestions = normalizeParsedQuestions(questions)
-const preset = getExamImportPreset(exam.gradeLevel)
-const finalQuestions = applyExamImportPreset(finalQuestions, preset)
+    const missingScoreQuestions = finalQuestions.filter((question) => {
+      return !Number(question.score || 0)
+    })
 
-if (finalQuestions.length === 0) {
-  return res.status(400).json({
-    message: '没有可导入的有效题目',
-  })
-}
-
-const missingScoreQuestions = finalQuestions.filter((question) => {
-  return !Number(question.score || 0)
-})
-
-if (missingScoreQuestions.length > 0) {
-  return res.status(400).json({
-    message: '部分题目缺少分值，请补充分值后再导入',
-    data: {
-      missingCount: missingScoreQuestions.length,
-      missingOrderIndexes: missingScoreQuestions.map((question) => question.orderIndex),
-      suggestion: preset
-        ? `当前试卷分类 ${exam.gradeLevel} 已有预设规则，但仍有题目无法匹配分值，请检查题号是否为 1-57。`
-        : '当前试卷分类没有预设分值规则，请在上传文件中填写分值，或先为该考试类型添加分值规则。',
-    },
-  })
-}
+    if (missingScoreQuestions.length > 0) {
+      return res.status(400).json({
+        message: '部分题目缺少分值，请补充分值后再导入',
+        data: {
+          missingCount: missingScoreQuestions.length,
+          missingOrderIndexes: missingScoreQuestions.map((question) => question.orderIndex),
+          suggestion: preset
+            ? `当前试卷分类 ${exam.gradeLevel} 已有预设规则，但仍有题目无法匹配分值，请检查题号是否为 1-57。`
+            : '当前试卷分类没有预设分值规则，请在上传文件中填写分值，或先为该考试类型添加分值规则。',
+        },
+      })
+    }
 
     const createdQuestions = await prisma.$transaction(async (tx) => {
       await tx.question.deleteMany({
@@ -1127,9 +1335,7 @@ if (missingScoreQuestions.length > 0) {
         result.push(createdQuestion)
       }
 
-      const totalScore = result.reduce((sum, question) => {
-        return sum + Number(question.score || 0)
-      }, 0)
+      const totalScore = calculateQuestionTotalScore(result)
 
       await tx.exam.update({
         where: {
@@ -1137,6 +1343,7 @@ if (missingScoreQuestions.length > 0) {
         },
         data: {
           totalScore,
+          timeLimit: preset?.timeLimit || exam.timeLimit,
         },
       })
 
@@ -1152,6 +1359,60 @@ if (missingScoreQuestions.length > 0) {
 
     res.status(500).json({
       message: '题目批量导入失败',
+      error: error.message,
+    })
+  }
+})
+
+router.post('/admin/import/parse-file', requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        message: '请上传 .txt 或 .docx 文件',
+      })
+    }
+
+    const originalName = req.file.originalname || ''
+    const lowerName = originalName.toLowerCase()
+    let rawText = ''
+
+    if (lowerName.endsWith('.txt')) {
+      rawText = await fs.readFile(req.file.path, 'utf-8')
+    } else if (lowerName.endsWith('.docx')) {
+      const result = await mammoth.extractRawText({
+        path: req.file.path,
+      })
+
+      rawText = result.value || ''
+    } else {
+      await fs.unlink(req.file.path).catch(() => {})
+
+      return res.status(400).json({
+        message: '只支持上传 .txt 或 .docx 文件',
+      })
+    }
+
+    const questions = parseQuestionsFromText(rawText)
+
+    await fs.unlink(req.file.path).catch(() => {})
+
+    res.json({
+      message: '文件解析成功',
+      data: {
+        fileName: originalName,
+        questionCount: questions.length,
+        questions,
+      },
+    })
+  } catch (error) {
+    console.error('Parse question file error:', error)
+
+    if (req.file?.path) {
+      await fs.unlink(req.file.path).catch(() => {})
+    }
+
+    res.status(500).json({
+      message: '文件解析失败',
       error: error.message,
     })
   }

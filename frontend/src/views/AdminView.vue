@@ -658,34 +658,33 @@ const handleImportQuestions = async () => {
       parsedQuestions.value
     )
 
-    const createdQuestions = await importQuestionsToExam(
-  selectedExamId.value,
-  parsedQuestions.value
-)
+    const importedTotalScore = createdQuestions.reduce((sum, question) => {
+      return sum + Number(question.score || 0)
+    }, 0)
 
-const importedTotalScore = createdQuestions.reduce((sum, question) => {
-  return sum + Number(question.score || 0)
-}, 0)
+    successMessage.value = `题目导入成功，共导入 ${createdQuestions.length} 道题，当前题目总分 ${importedTotalScore} 分。`
 
-successMessage.value = `题目导入成功，共导入 ${createdQuestions.length} 道题，当前题目总分 ${importedTotalScore} 分。`
     parsedQuestions.value = []
     selectedFile.value = null
     parsedFileName.value = ''
+
     await loadAdminExams()
 
     if (selectedQuestionExamId.value === selectedExamId.value) {
       await handleLoadQuestionsByExamId(selectedExamId.value)
     }
   } catch (error) {
-  console.error(error)
+    console.error(error)
 
-  if (String(error.message || '').includes('缺少分值')) {
-    errorMessage.value = `${error.message}。请在上传文件中补充分值，或先为该考试类型添加分值规则。`
-    return
+    if (String(error.message || '').includes('缺少分值')) {
+      errorMessage.value = `${error.message}。请在上传文件中补充分值，或先为该考试类型添加分值规则。`
+      return
+    }
+
+    errorMessage.value = error.message || '题目导入失败'
+  } finally {
+    isImportingQuestions.value = false
   }
-
-  errorMessage.value = error.message || '题目导入失败'
-}
 }
 
 const copyImportExample = async () => {
@@ -912,7 +911,7 @@ onMounted(() => {
 
           <label>
             试卷分类
-            <select v-model="editExamForm.gradeLevel" @change="applyExamPresetToEditForm">
+            <select v-model="form.gradeLevel" @change="applyExamPresetToForm">
               <optgroup
                 v-for="group in examCategoryOptions"
                 :key="group.group"
@@ -1154,11 +1153,20 @@ onMounted(() => {
 
                   <label>
                     试卷分类
-                    <select v-model="editExamForm.gradeLevel">
-                      <option value="PRIMARY">小学</option>
-                      <option value="JUNIOR">初中</option>
-                      <option value="SENIOR">高中</option>
-                      <option value="COLLEGE">大学</option>
+                    <select v-model="editExamForm.gradeLevel" @change="applyExamPresetToEditForm">
+                      <optgroup
+                        v-for="group in examCategoryOptions"
+                        :key="group.group"
+                        :label="group.group"
+                      >
+                        <option
+                          v-for="option in group.options"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </option>
+                      </optgroup>
                     </select>
                   </label>
 
