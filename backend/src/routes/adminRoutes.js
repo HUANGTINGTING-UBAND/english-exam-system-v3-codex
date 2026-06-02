@@ -76,16 +76,9 @@ const applyExamImportPreset = (questions, preset) => {
       ? Number(preset.getScore(normalizedQuestion) || 0)
       : 0
 
-    if (presetScore > 0) {
-      return {
-        ...normalizedQuestion,
-        score: presetScore,
-      }
-    }
-
     return {
       ...normalizedQuestion,
-      score: Number(question.score || 0),
+      score: presetScore > 0 ? presetScore : Number(question.score || 0),
     }
   })
 }
@@ -1024,13 +1017,20 @@ router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, r
       })
     }
 
-    const normalizedQuestions = normalizeParsedQuestions(questions)
-    const preset = getExamImportPreset(
-      exam.gradeLevel,
-      exam.title,
-      normalizedQuestions.length
-    )
-    const finalQuestions = applyExamImportPreset(normalizedQuestions, preset)
+const normalizedQuestions = normalizeParsedQuestions(questions)
+
+let preset = getExamImportPreset(
+  exam.gradeLevel,
+  exam.title,
+  normalizedQuestions.length
+)
+
+// 兜底：只要是 57 题，默认按 CET4 规则处理
+if (!preset && normalizedQuestions.length === 57) {
+  preset = examImportPresets.CET4
+}
+
+const finalQuestions = applyExamImportPreset(normalizedQuestions, preset)
 
     console.log('===== CET IMPORT DEBUG =====')
     console.log('examId:', examId)
@@ -1055,9 +1055,20 @@ router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, r
       })
     }
 
-    const missingScoreQuestions = finalQuestions.filter((question) => {
-      return !Number(question.score || 0)
-    })
+   const missingScoreQuestions = finalQuestions.filter((question) => {
+  return !Number(question.score || 0)
+})
+
+if (missingScoreQuestions.length > 0 && !preset) {
+  return res.status(400).json({
+    message: '部分题目缺少分值，请补充分值后再导入',
+    data: {
+      missingCount: missingScoreQuestions.length,
+      missingOrderIndexes: missingScoreQuestions.map((question) => question.orderIndex),
+      suggestion: '当前试卷分类没有预设分值规则，请在上传文件中填写分值，或先为该考试类型添加分值规则。',
+    },
+  })
+}
 
     if (missingScoreQuestions.length > 0) {
       return res.status(400).json({
