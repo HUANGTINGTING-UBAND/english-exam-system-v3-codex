@@ -1,17 +1,33 @@
 const express = require('express')
+const fs = require('fs/promises')
+const multer = require('multer')
+const mammoth = require('mammoth')
 const prisma = require('../lib/prisma')
 const { requireAdmin } = require('../middlewares/authMiddleware')
 
 const router = express.Router()
+const upload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+})
 
 const normalizeQuestionType = (type) => {
-  const typeText = String(type || '').toUpperCase()
+  const typeText = String(type || '').trim().toUpperCase()
 
   const typeMap = {
     CHOICE: 'CHOICE',
     SINGLE_CHOICE: 'CHOICE',
     单选题: 'CHOICE',
     选择题: 'CHOICE',
+    听力选择题: 'CHOICE',
+    阅读选择题: 'CHOICE',
+    仔细阅读: 'CHOICE',
+    长篇阅读: 'CHOICE',
+    段落匹配: 'CHOICE',
+    选词填空: 'CHOICE',
+    完形填空选择题: 'CHOICE',
 
     TRANSLATION: 'TRANSLATION',
     翻译题: 'TRANSLATION',
@@ -22,14 +38,77 @@ const normalizeQuestionType = (type) => {
     WRITING: 'WRITING',
     写作题: 'WRITING',
 
-    READING: 'READING',
-    阅读理解: 'READING',
+    READING: 'CHOICE',
+    阅读理解: 'CHOICE',
 
-    CLOZE: 'CLOZE',
-    完形填空: 'CLOZE',
+    CLOZE: 'CHOICE',
+    完形填空: 'CHOICE',
   }
 
-  return typeMap[typeText] || typeText || 'CHOICE'
+  return typeMap[typeText] || typeMap[String(type || '').trim()] || 'CHOICE'
+}
+
+const normalizeChoiceAnswer = (answer) => {
+  if (answer === null || answer === undefined || answer === '') {
+    return null
+  }
+
+  if (typeof answer === 'number') {
+    return answer
+  }
+
+  const text = String(answer).trim().toUpperCase()
+
+  const letterMap = {
+    A: 0,
+    B: 1,
+    C: 2,
+    D: 3,
+    E: 4,
+    F: 5,
+    G: 6,
+    H: 7,
+    I: 8,
+    J: 9,
+    K: 10,
+    L: 11,
+    M: 12,
+    N: 13,
+    O: 14,
+  }
+
+  if (letterMap[text] !== undefined) {
+    return letterMap[text]
+  }
+
+  const numberValue = Number(text)
+
+  if (!Number.isNaN(numberValue)) {
+    return numberValue
+  }
+
+  return null
+}
+
+const normalizeOptions = (options) => {
+  if (Array.isArray(options)) {
+    return options
+      .map((option) => String(option || '').trim())
+      .filter(Boolean)
+      .map((option) => option.replace(/^[A-O][\.．、\)]\s*/i, '').trim())
+      .filter(Boolean)
+  }
+
+  if (typeof options === 'string') {
+    return options
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.replace(/^[A-O][\.．、\)]\s*/i, '').trim())
+      .filter(Boolean)
+  }
+
+  return []
 }
 
 const normalizeParsedQuestions = (questions) => {
@@ -40,18 +119,19 @@ const normalizeParsedQuestions = (questions) => {
   return questions
     .map((question, index) => {
       const finalType = normalizeQuestionType(question.type)
+      const options = normalizeOptions(question.options)
+      const hasOptions = options.length > 0
 
       return {
-        type: finalType,
+        type: hasOptions ? 'CHOICE' : finalType,
         text: String(question.text || '').trim(),
-        options:
-          finalType === 'CHOICE' && Array.isArray(question.options)
-            ? question.options.map((option) => String(option).trim()).filter(Boolean)
-            : null,
+        options: hasOptions ? options : null,
         answer:
-          question.answer === undefined || question.answer === null || question.answer === ''
-            ? null
-            : question.answer,
+          hasOptions
+            ? normalizeChoiceAnswer(question.answer)
+            : question.answer === undefined || question.answer === null
+              ? null
+              : String(question.answer).trim(),
         score: Number(question.score || 0),
         knowledgePoint: String(question.knowledgePoint || '未分类').trim(),
         referenceAnswer: String(question.referenceAnswer || '').trim(),
@@ -60,6 +140,121 @@ const normalizeParsedQuestions = (questions) => {
       }
     })
     .filter((question) => question.text)
+    .filter((question) => {
+      const text = question.text.trim()
+
+      if (!text) {
+        return false
+      }
+
+      const invalidTexts = [
+        '说明',
+        '题型标题',
+        'PART I',
+        'PART II',
+        'PART III',
+        'PART IV',
+        'SECTION A',
+        'SECTION B',
+        'SECTION C',
+        'DIRECTIONS',
+      ]
+
+      return !invalidTexts.some((item) => text.toUpperCase().startsWith(item))
+    })
+}
+
+const getFieldValue = (block, fieldNames) => {
+  const names = Array.isArray(fieldNames) ? fieldNames : [fieldNames]
+  const escapedNames = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+  const labelPattern = escapedNames.join('|')
+  const nextLabelPattern =
+    '题号|题型|题干|选项|答案|参考答案|解析|知识点|分值'
+
+  const regex = new RegExp(
+    `(?:${labelPattern})\\s*[:：]\\s*([\\s\\S]*?)(?=\\n(?:${nextLabelPattern})\\s*[:：]|$)`,
+    'i'
+  )
+
+  const match = block.match(regex)
+
+  return match ? match[1].trim() : ''
+}
+
+const parseOptionsFromText = (optionsText) => {
+  const lines = String(optionsText || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  const options = []
+  let currentOption = ''
+
+  for (const line of lines) {
+    const optionMatch = line.match(/^([A-O])[\.\、．\)]\s*(.*)$/i)
+
+    if (optionMatch) {
+      if (currentOption) {
+        options.push(currentOption.trim())
+      }
+
+      currentOption = optionMatch[2].trim()
+    } else if (currentOption) {
+      currentOption += ` ${line}`
+    }
+  }
+
+  if (currentOption) {
+    options.push(currentOption.trim())
+  }
+
+  return options.filter(Boolean)
+}
+
+const parseQuestionsFromText = (rawText) => {
+  const text = String(rawText || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\u00A0/g, ' ')
+    .trim()
+
+  if (!text) {
+    return []
+  }
+
+  const blocks = text
+    .split(/(?=\n?题号\s*[:：]\s*\d+)/g)
+    .map((block) => block.trim())
+    .filter((block) => /^题号\s*[:：]\s*\d+/m.test(block))
+
+  const questions = blocks.map((block, index) => {
+    const orderIndexText = getFieldValue(block, '题号')
+    const type = getFieldValue(block, '题型') || '单选题'
+    const text = getFieldValue(block, '题干')
+    const optionsText = getFieldValue(block, '选项')
+    const answer = getFieldValue(block, ['答案', '参考答案'])
+    const referenceAnswer = getFieldValue(block, '参考答案')
+    const explanation = getFieldValue(block, '解析')
+    const knowledgePoint = getFieldValue(block, '知识点')
+    const scoreText = getFieldValue(block, '分值')
+
+    const options = parseOptionsFromText(optionsText)
+
+    return {
+      type,
+      text,
+      options,
+      answer,
+      score: Number(scoreText || 0),
+      knowledgePoint: knowledgePoint || '未分类',
+      referenceAnswer,
+      explanation,
+      orderIndex: Number(orderIndexText || index + 1),
+    }
+  })
+
+  return normalizeParsedQuestions(questions)
 }
 
 router.get('/admin/exams', requireAdmin, async (req, res) => {
@@ -714,6 +909,141 @@ ${String(rawText).trim()}
 
     res.status(500).json({
       message: 'AI 解析失败',
+      error: error.message,
+    })
+  }
+})
+
+router.post('/admin/import/parse-file', requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        message: '请上传 .txt 或 .docx 文件',
+      })
+    }
+
+    const originalName = req.file.originalname || ''
+    const lowerName = originalName.toLowerCase()
+    let rawText = ''
+
+    if (lowerName.endsWith('.txt')) {
+      rawText = await fs.readFile(req.file.path, 'utf-8')
+    } else if (lowerName.endsWith('.docx')) {
+      const result = await mammoth.extractRawText({
+        path: req.file.path,
+      })
+
+      rawText = result.value || ''
+    } else {
+      return res.status(400).json({
+        message: '只支持上传 .txt 或 .docx 文件',
+      })
+    }
+
+    const questions = parseQuestionsFromText(rawText)
+
+    await fs.unlink(req.file.path).catch(() => {})
+
+    res.json({
+      message: '文件解析成功',
+      data: {
+        fileName: originalName,
+        questionCount: questions.length,
+        questions,
+      },
+    })
+  } catch (error) {
+    console.error('Parse question file error:', error)
+
+    if (req.file?.path) {
+      await fs.unlink(req.file.path).catch(() => {})
+    }
+
+    res.status(500).json({
+      message: '文件解析失败',
+      error: error.message,
+    })
+  }
+})
+
+router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, res) => {
+  try {
+    const { examId } = req.params
+    const { questions } = req.body
+
+    const exam = await prisma.exam.findUnique({
+      where: {
+        id: examId,
+      },
+    })
+
+    if (!exam) {
+      return res.status(404).json({
+        message: '试卷不存在',
+      })
+    }
+
+    const normalizedQuestions = normalizeParsedQuestions(questions)
+
+    if (normalizedQuestions.length === 0) {
+      return res.status(400).json({
+        message: '没有可导入的有效题目',
+      })
+    }
+
+    const createdQuestions = await prisma.$transaction(async (tx) => {
+      await tx.question.deleteMany({
+        where: {
+          examId,
+        },
+      })
+
+      const result = []
+
+      for (const question of normalizedQuestions) {
+        const createdQuestion = await tx.question.create({
+          data: {
+            examId,
+            type: question.type,
+            text: question.text,
+            options: question.options,
+            answer: question.answer,
+            score: Number(question.score || 0),
+            knowledgePoint: question.knowledgePoint || '未分类',
+            referenceAnswer: question.referenceAnswer || '',
+            explanation: question.explanation || '',
+            orderIndex: Number(question.orderIndex || result.length + 1),
+          },
+        })
+
+        result.push(createdQuestion)
+      }
+
+      const totalScore = result.reduce((sum, question) => {
+        return sum + Number(question.score || 0)
+      }, 0)
+
+      await tx.exam.update({
+        where: {
+          id: examId,
+        },
+        data: {
+          totalScore,
+        },
+      })
+
+      return result
+    })
+
+    res.status(201).json({
+      message: '题目批量导入成功',
+      data: createdQuestions,
+    })
+  } catch (error) {
+    console.error('Import questions error:', error)
+
+    res.status(500).json({
+      message: '题目批量导入失败',
       error: error.message,
     })
   }
