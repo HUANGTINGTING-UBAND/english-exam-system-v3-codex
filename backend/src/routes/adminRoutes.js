@@ -362,23 +362,21 @@ router.get('/admin/exams', requireAdmin, async (req, res) => {
     })
 
     const formattedExams = exams.map((exam) => {
-      const realTotalScore = exam.questions.reduce((sum, question) => {
-        return sum + Number(question.score || 0)
-      }, 0)
+    const realTotalScore = calculateQuestionTotalScore(exam.questions)
 
-      return {
-        id: exam.id,
-        title: exam.title,
-        gradeLevel: exam.gradeLevel,
-        description: exam.description,
-        timeLimit: exam.timeLimit,
-        totalScore: realTotalScore,
-        isPublished: exam.isPublished,
-        questionCount: exam.questions.length,
-        createdAt: exam.createdAt,
-        updatedAt: exam.updatedAt,
-      }
-    })
+    return {
+      id: exam.id,
+      title: exam.title,
+      gradeLevel: exam.gradeLevel,
+      description: exam.description,
+      timeLimit: exam.timeLimit,
+      totalScore: realTotalScore,
+      isPublished: exam.isPublished,
+      questionCount: exam.questions.length,
+      createdAt: exam.createdAt,
+      updatedAt: exam.updatedAt,
+    }
+  })
 
     res.json({
       message: 'Admin exams loaded successfully',
