@@ -18,6 +18,16 @@ import {
 
 const currentUser = ref(getSavedUser())
 
+const formatScore = (score) => {
+  const value = Number(score || 0)
+
+  if (Number.isInteger(value)) {
+    return String(value)
+  }
+
+  return String(Number(value.toFixed(2)))
+}
+
 const isAdmin = computed(() => {
   return currentUser.value?.role === 'ADMIN'
 })
@@ -1212,7 +1222,7 @@ onMounted(() => {
                 <div class="admin-exam-meta">
                   <span>分类：{{ gradeNameMap[exam.gradeLevel] || exam.gradeLevel }}</span>
                   <span>题目：{{ exam.questionCount }} 题</span>
-                  <span>满分：{{ exam.totalScore }} 分</span>
+                  <span>满分：{{ Number(exam.totalScore || 0).toFixed(2).replace(/\.00$/, '') }} 分</span>
                   <span>时长：{{ formatTimeLimit(exam.timeLimit) }}</span>
                   <span>状态：{{ exam.isPublished ? '已发布' : '已下架' }}</span>
                   <span>创建：{{ formatDateTime(exam.createdAt) }}</span>
