@@ -84,9 +84,11 @@ const applyExamImportPreset = (questions, preset) => {
 }
 
 const calculateQuestionTotalScore = (questions) => {
-  return questions.reduce((sum, question) => {
+  const total = questions.reduce((sum, question) => {
     return sum + Number(question.score || 0)
   }, 0)
+
+  return Number(total.toFixed(2))
 }
 
 const normalizeQuestionType = (type) => {
