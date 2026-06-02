@@ -36,9 +36,27 @@ const examImportPresets = {
   },
 }
 
-const getExamImportPreset = (gradeLevel) => {
+const getExamImportPreset = (gradeLevel, examTitle = '', questionCount = 0) => {
   const key = String(gradeLevel || '').trim().toUpperCase()
-  return examImportPresets[key] || null
+  const title = String(examTitle || '').trim().toUpperCase()
+
+  if (examImportPresets[key]) {
+    return examImportPresets[key]
+  }
+
+  if (
+    title.includes('CET4') ||
+    title.includes('四级') ||
+    title.includes('大学英语四级')
+  ) {
+    return examImportPresets.CET4
+  }
+
+  if (Number(questionCount) === 57) {
+    return examImportPresets.CET4
+  }
+
+  return null
 }
 
 const applyExamImportPreset = (questions, preset) => {
@@ -46,20 +64,27 @@ const applyExamImportPreset = (questions, preset) => {
     return []
   }
 
-  return questions.map((question) => {
+  return questions.map((question, index) => {
+    const orderIndex = Number(question.orderIndex || index + 1)
+
+    const normalizedQuestion = {
+      ...question,
+      orderIndex,
+    }
+
     const presetScore = preset?.getScore
-      ? Number(preset.getScore(question) || 0)
+      ? Number(preset.getScore(normalizedQuestion) || 0)
       : 0
 
     if (presetScore > 0) {
       return {
-        ...question,
+        ...normalizedQuestion,
         score: presetScore,
       }
     }
 
     return {
-      ...question,
+      ...normalizedQuestion,
       score: Number(question.score || 0),
     }
   })
@@ -1000,8 +1025,29 @@ router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, r
     }
 
     const normalizedQuestions = normalizeParsedQuestions(questions)
-    const preset = getExamImportPreset(exam.gradeLevel)
+    const preset = getExamImportPreset(
+      exam.gradeLevel,
+      exam.title,
+      normalizedQuestions.length
+    )
     const finalQuestions = applyExamImportPreset(normalizedQuestions, preset)
+
+    console.log('===== CET IMPORT DEBUG =====')
+    console.log('examId:', examId)
+    console.log('exam.title:', exam.title)
+    console.log('exam.gradeLevel:', exam.gradeLevel)
+    console.log('questionCount:', normalizedQuestions.length)
+    console.log('preset:', preset?.name || 'NO_PRESET')
+    console.log(
+      'score preview:',
+      finalQuestions.slice(0, 10).map((question) => ({
+        orderIndex: question.orderIndex,
+        type: question.type,
+        score: question.score,
+        text: question.text.slice(0, 30),
+      }))
+    )
+    console.log('total preview:', calculateQuestionTotalScore(finalQuestions))
 
     if (finalQuestions.length === 0) {
       return res.status(400).json({
