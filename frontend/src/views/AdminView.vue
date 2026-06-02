@@ -93,6 +93,12 @@ const typeNameMap = {
   CLOZE: '完形填空',
 }
 
+const applyExamPresetToForm = () => {
+  if (form.value.gradeLevel === 'CET4') {
+    form.value.timeLimit = 7500
+  }
+}
+
 const filteredExams = computed(() => {
   const keyword = examKeyword.value.trim().toLowerCase()
 
@@ -652,7 +658,16 @@ const handleImportQuestions = async () => {
       parsedQuestions.value
     )
 
-    successMessage.value = `题目导入成功，共导入 ${createdQuestions.length} 道题`
+    const createdQuestions = await importQuestionsToExam(
+  selectedExamId.value,
+  parsedQuestions.value
+)
+
+const importedTotalScore = createdQuestions.reduce((sum, question) => {
+  return sum + Number(question.score || 0)
+}, 0)
+
+successMessage.value = `题目导入成功，共导入 ${createdQuestions.length} 道题，当前题目总分 ${importedTotalScore} 分。`
     parsedQuestions.value = []
     selectedFile.value = null
     parsedFileName.value = ''
@@ -662,11 +677,15 @@ const handleImportQuestions = async () => {
       await handleLoadQuestionsByExamId(selectedExamId.value)
     }
   } catch (error) {
-    console.error(error)
-    errorMessage.value = error.message || '题目导入失败'
-  } finally {
-    isImportingQuestions.value = false
+  console.error(error)
+
+  if (String(error.message || '').includes('缺少分值')) {
+    errorMessage.value = `${error.message}。请在上传文件中补充分值，或先为该考试类型添加分值规则。`
+    return
   }
+
+  errorMessage.value = error.message || '题目导入失败'
+}
 }
 
 const copyImportExample = async () => {
@@ -733,6 +752,12 @@ const closeEditQuestion = () => {
     referenceAnswer: '',
     explanation: '',
     orderIndex: 1,
+  }
+}
+
+const applyExamPresetToEditForm = () => {
+  if (editExamForm.value.gradeLevel === 'CET4') {
+    editExamForm.value.timeLimit = 7500
   }
 }
 
@@ -887,7 +912,7 @@ onMounted(() => {
 
           <label>
             试卷分类
-            <select v-model="form.gradeLevel">
+            <select v-model="editExamForm.gradeLevel" @change="applyExamPresetToEditForm">
               <optgroup
                 v-for="group in examCategoryOptions"
                 :key="group.group"

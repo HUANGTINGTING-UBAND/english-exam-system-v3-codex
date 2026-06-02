@@ -13,6 +13,87 @@ const upload = multer({
   },
 })
 
+const examImportPresets = {
+  CET4: {
+    name: '大学英语四级',
+    timeLimit: 7500,
+    totalScore: 710,
+    getScore(question) {
+      const orderIndex = Number(question.orderIndex || 0)
+
+      if (orderIndex === 1) {
+        return 106.5
+      }
+
+      if (orderIndex >= 2 && orderIndex <= 8) {
+        return 7.1
+      }
+
+      if (orderIndex >= 9 && orderIndex <= 16) {
+        return 7.1
+      }
+
+      if (orderIndex >= 17 && orderIndex <= 26) {
+        return 14.2
+      }
+
+      if (orderIndex >= 27 && orderIndex <= 36) {
+        return 3.55
+      }
+
+      if (orderIndex >= 37 && orderIndex <= 46) {
+        return 7.1
+      }
+
+      if (orderIndex >= 47 && orderIndex <= 56) {
+        return 14.2
+      }
+
+      if (orderIndex === 57) {
+        return 106.5
+      }
+
+      return 0
+    },
+  },
+}
+
+const getExamImportPreset = (gradeLevel) => {
+  const key = String(gradeLevel || '').trim().toUpperCase()
+
+  return examImportPresets[key] || null
+}
+
+const applyExamImportPreset = (questions, preset) => {
+  if (!Array.isArray(questions)) {
+    return []
+  }
+
+  return questions.map((question) => {
+    const currentScore = Number(question.score || 0)
+
+    if (currentScore > 0) {
+      return {
+        ...question,
+        score: currentScore,
+      }
+    }
+
+    const presetScore = preset?.getScore ? Number(preset.getScore(question) || 0) : 0
+
+    return {
+      ...question,
+      score: presetScore,
+    }
+  })
+}
+
+const calculateQuestionTotalScore = (questions) => {
+  return questions.reduce((sum, question) => {
+    return sum + Number(question.score || 0)
+  }, 0)
+}
+
 const normalizeQuestionType = (type) => {
   const typeText = String(type || '').trim().toUpperCase()
 
@@ -983,13 +1064,40 @@ router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, r
       })
     }
 
-    const normalizedQuestions = normalizeParsedQuestions(questions)
+    const finalQuestions = normalizeParsedQuestions(questions)
 
-    if (normalizedQuestions.length === 0) {
+    if (finalQuestions.length === 0) {
       return res.status(400).json({
         message: '没有可导入的有效题目',
       })
     }
+
+    const finalQuestions = normalizeParsedQuestions(questions)
+const preset = getExamImportPreset(exam.gradeLevel)
+const finalQuestions = applyExamImportPreset(finalQuestions, preset)
+
+if (finalQuestions.length === 0) {
+  return res.status(400).json({
+    message: '没有可导入的有效题目',
+  })
+}
+
+const missingScoreQuestions = finalQuestions.filter((question) => {
+  return !Number(question.score || 0)
+})
+
+if (missingScoreQuestions.length > 0) {
+  return res.status(400).json({
+    message: '部分题目缺少分值，请补充分值后再导入',
+    data: {
+      missingCount: missingScoreQuestions.length,
+      missingOrderIndexes: missingScoreQuestions.map((question) => question.orderIndex),
+      suggestion: preset
+        ? `当前试卷分类 ${exam.gradeLevel} 已有预设规则，但仍有题目无法匹配分值，请检查题号是否为 1-57。`
+        : '当前试卷分类没有预设分值规则，请在上传文件中填写分值，或先为该考试类型添加分值规则。',
+    },
+  })
+}
 
     const createdQuestions = await prisma.$transaction(async (tx) => {
       await tx.question.deleteMany({
@@ -1000,7 +1108,7 @@ router.post('/admin/exams/:examId/import-questions', requireAdmin, async (req, r
 
       const result = []
 
-      for (const question of normalizedQuestions) {
+      for (const question of finalQuestions) {
         const createdQuestion = await tx.question.create({
           data: {
             examId,
