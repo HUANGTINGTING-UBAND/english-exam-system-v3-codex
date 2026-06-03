@@ -41,7 +41,10 @@ const errorMessage = ref('')
 const successMessage = ref('')
 
 const selectedExamId = ref('')
-const selectedFile = ref(null)
+const selectedPaperFile = ref(null)
+const selectedAnalysisFile = ref(null)
+const selectedAudioFile = ref(null)
+const selectedTranscriptFile = ref(null)
 const parsedQuestions = ref([])
 const parsedFileName = ref('')
 const isParsingFile = ref(false)
@@ -602,37 +605,65 @@ const handleTogglePublish = async (exam) => {
   }
 }
 
-const handleFileChange = (event) => {
-  const file = event.target.files?.[0]
-
-  selectedFile.value = file || null
+const resetParsedImportResult = () => {
   parsedQuestions.value = []
   parsedFileName.value = ''
   errorMessage.value = ''
   successMessage.value = ''
 }
 
+const handlePaperFileChange = (event) => {
+  selectedPaperFile.value = event.target.files?.[0] || null
+  resetParsedImportResult()
+}
+
+const handleAnalysisFileChange = (event) => {
+  selectedAnalysisFile.value = event.target.files?.[0] || null
+  resetParsedImportResult()
+}
+
+const handleAudioFileChange = (event) => {
+  selectedAudioFile.value = event.target.files?.[0] || null
+  resetParsedImportResult()
+}
+
+const handleTranscriptFileChange = (event) => {
+  selectedTranscriptFile.value = event.target.files?.[0] || null
+  resetParsedImportResult()
+}
+
 const handleParseFile = async () => {
   errorMessage.value = ''
   successMessage.value = ''
 
-  if (!selectedFile.value) {
-    errorMessage.value = '请先选择 .txt 或 .docx 试卷文件'
+  if (!selectedPaperFile.value) {
+    errorMessage.value = '请先上传试卷原题文件'
     return
   }
 
   isParsingFile.value = true
 
   try {
-    const result = await parseQuestionFile(selectedFile.value)
+    const result = await parseQuestionFile({
+      paperFile: selectedPaperFile.value,
+      analysisFile: selectedAnalysisFile.value,
+      audioFile: selectedAudioFile.value,
+      transcriptFile: selectedTranscriptFile.value,
+      examType: form.value.gradeLevel,
+    })
 
-    parsedFileName.value = result.fileName
+    parsedFileName.value = result.fileName || selectedPaperFile.value.name
     parsedQuestions.value = result.questions || []
 
-    successMessage.value = `文件解析成功，共识别 ${result.questionCount || parsedQuestions.value.length} 道题`
+    const materialCount = result.materialCount || 0
+    const detectedExamType = result.detectedExamType || '未识别'
+    const totalScore = result.totalScore || 0
+    const timeLimit = result.timeLimit || 0
+
+    successMessage.value = `预处理成功：识别 ${parsedQuestions.value.length} 道题，材料 ${materialCount} 组，考试类型 ${detectedExamType}，预计总分 ${totalScore} 分，预计时间 ${Math.round(timeLimit / 60)} 分钟。`
   } catch (error) {
     console.error(error)
-    errorMessage.value = error.message || '文件解析失败'
+    errorMessage.value = error.message || '文件预处理失败'
   } finally {
     isParsingFile.value = false
   }
@@ -675,7 +706,10 @@ const handleImportQuestions = async () => {
     successMessage.value = `题目导入成功，共导入 ${createdQuestions.length} 道题，当前题目总分 ${importedTotalScore} 分。`
 
     parsedQuestions.value = []
-    selectedFile.value = null
+    selectedPaperFile.value = null
+    selectedAnalysisFile.value = null
+    selectedAudioFile.value = null
+    selectedTranscriptFile.value = null
     parsedFileName.value = ''
 
     await loadAdminExams()
@@ -1013,12 +1047,39 @@ onMounted(() => {
             </select>
           </label>
 
+         <label>
+  试卷原题文件，必填
+  <input
+    type="file"
+    accept=".txt,.docx,.pdf"
+    @change="handlePaperFileChange"
+  />
+</label>
+
+<label>
+  答案 / 解析文件，选填
+  <input
+    type="file"
+    accept=".txt,.docx,.pdf"
+    @change="handleAnalysisFileChange"
+  />
+</label>
+
+<label>
+  听力音频文件，选填
+  <input
+    type="file"
+    accept=".mp3,.wav,.m4a"
+    @change="handleAudioFileChange"
+  />
+</label>
+
           <label>
-            上传试卷文件
+            听力原文文件，选填
             <input
               type="file"
-              accept=".txt,.docx"
-              @change="handleFileChange"
+              accept=".txt,.docx,.pdf"
+              @change="handleTranscriptFileChange"
             />
           </label>
 

@@ -283,19 +283,40 @@ export const deleteAdminQuestion = async (questionId) => {
   return parseResponse(response, '删除题目失败')
 }
 
-export const parseQuestionFile = async (file) => {
+export const parseQuestionFile = async ({
+  paperFile,
+  analysisFile,
+  audioFile,
+  transcriptFile,
+  examType,
+}) => {
   const formData = new FormData()
-  formData.append('file', file)
 
-  const response = await fetch(`${API_BASE_URL}/admin/import/parse-file`, {
+  formData.append('paperFile', paperFile)
+
+  if (analysisFile) {
+    formData.append('analysisFile', analysisFile)
+  }
+
+  if (audioFile) {
+    formData.append('audioFile', audioFile)
+  }
+
+  if (transcriptFile) {
+    formData.append('transcriptFile', transcriptFile)
+  }
+
+  if (examType) {
+    formData.append('examType', examType)
+  }
+
+  const response = await fetch(`${API_BASE_URL}/admin/import/prepare`, {
     method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-    },
+    headers: getAuthHeaders(),
     body: formData,
   })
 
-  return parseResponse(response, '解析试卷文件失败')
+  return parseResponse(response)
 }
 
 export const importQuestionsToExam = async (examId, questions) => {

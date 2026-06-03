@@ -2,6 +2,7 @@ const express = require('express')
 const fs = require('fs/promises')
 const multer = require('multer')
 const mammoth = require('mammoth')
+const pdfParse = require('pdf-parse')
 const prisma = require('../lib/prisma')
 const { requireAdmin } = require('../middlewares/authMiddleware')
 
@@ -9,7 +10,7 @@ const router = express.Router()
 const upload = multer({
   dest: 'uploads/',
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 30 * 1024 * 1024,
   },
 })
 
@@ -343,6 +344,59 @@ const parseQuestionsFromText = (rawText) => {
   })
 
   return normalizeParsedQuestions(questions)
+}
+
+const readUploadedTextFile = async (file) => {
+  if (!file) {
+    return ''
+  }
+
+  const originalName = file.originalname || ''
+  const lowerName = originalName.toLowerCase()
+
+  if (lowerName.endsWith('.txt')) {
+    return fs.readFile(file.path, 'utf-8')
+  }
+
+  if (lowerName.endsWith('.docx')) {
+    const result = await mammoth.extractRawText({
+      path: file.path,
+    })
+
+    return result.value || ''
+  }
+
+  if (lowerName.endsWith('.pdf')) {
+    const buffer = await fs.readFile(file.path)
+    const result = await pdfParse(buffer)
+
+    return result.text || ''
+  }
+
+  return ''
+}
+
+const removeUploadedFiles = async (files = []) => {
+  await Promise.all(
+    files
+      .filter(Boolean)
+      .map((file) => fs.unlink(file.path).catch(() => {}))
+  )
+}
+
+const detectExamTypeFromImport = ({ fileName = '', paperText = '', questionCount = 0 }) => {
+  const text = `${fileName} ${paperText}`.toUpperCase()
+
+  if (
+    text.includes('CET4') ||
+    text.includes('四级') ||
+    text.includes('大学英语四级') ||
+    Number(questionCount) === 57
+  ) {
+    return 'CET4'
+  }
+
+  return ''
 }
 
 router.get('/admin/exams', requireAdmin, async (req, res) => {
@@ -1193,5 +1247,103 @@ router.post('/admin/import/parse-file', requireAdmin, upload.single('file'), asy
     })
   }
 })
+
+router.post(
+  '/admin/import/prepare',
+  requireAdmin,
+  upload.fields([
+    { name: 'paperFile', maxCount: 1 },
+    { name: 'analysisFile', maxCount: 1 },
+    { name: 'audioFile', maxCount: 1 },
+    { name: 'transcriptFile', maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const uploadedFiles = [
+      req.files?.paperFile?.[0],
+      req.files?.analysisFile?.[0],
+      req.files?.audioFile?.[0],
+      req.files?.transcriptFile?.[0],
+    ]
+
+    try {
+      const paperFile = req.files?.paperFile?.[0]
+      const analysisFile = req.files?.analysisFile?.[0]
+      const audioFile = req.files?.audioFile?.[0]
+      const transcriptFile = req.files?.transcriptFile?.[0]
+      const examType = req.body.examType || ''
+
+      if (!paperFile) {
+        await removeUploadedFiles(uploadedFiles)
+
+        return res.status(400).json({
+          message: '请上传试卷原题文件',
+        })
+      }
+
+      const paperText = await readUploadedTextFile(paperFile)
+
+      if (!paperText.trim()) {
+        await removeUploadedFiles(uploadedFiles)
+
+        return res.status(400).json({
+          message: '未能从试卷文件中提取文字。如果这是扫描版 PDF，请先转成文字版，或后续使用 OCR 功能。',
+        })
+      }
+
+      const analysisText = await readUploadedTextFile(analysisFile)
+      const transcriptText = await readUploadedTextFile(transcriptFile)
+
+      const questions = parseQuestionsFromText(paperText)
+
+      const detectedExamType =
+        examType ||
+        detectExamTypeFromImport({
+          fileName: paperFile.originalname,
+          paperText,
+          questionCount: questions.length,
+        })
+
+      const preset = getExamImportPreset(
+        detectedExamType,
+        paperFile.originalname,
+        questions.length
+      )
+
+      const finalQuestions = applyExamImportPreset(questions, preset)
+      const totalScore = calculateQuestionTotalScore(finalQuestions)
+
+      await removeUploadedFiles(uploadedFiles)
+
+      res.json({
+        message: '文件预处理成功',
+        data: {
+          fileName: paperFile.originalname,
+          detectedExamType: detectedExamType || 'UNKNOWN',
+          questionCount: finalQuestions.length,
+          materialCount: 0,
+          totalScore,
+          timeLimit: preset?.timeLimit || 0,
+          audioFileName: audioFile?.originalname || '',
+          hasAnalysisFile: Boolean(analysisFile),
+          hasAudioFile: Boolean(audioFile),
+          hasTranscriptFile: Boolean(transcriptFile),
+          analysisTextPreview: analysisText.slice(0, 300),
+          transcriptTextPreview: transcriptText.slice(0, 300),
+          warnings: [],
+          questions: finalQuestions,
+        },
+      })
+    } catch (error) {
+      console.error('Prepare import error:', error)
+
+      await removeUploadedFiles(uploadedFiles)
+
+      res.status(500).json({
+        message: '文件预处理失败',
+        error: error.message,
+      })
+    }
+  }
+)
 
 module.exports = router
