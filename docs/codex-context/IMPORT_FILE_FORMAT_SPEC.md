@@ -39,7 +39,127 @@ Rules:
 ## PDF
 
 Only text-based PDF is supported in the basic version.
+## Watermark, Header, Footer, and Noise Filtering
 
+Some uploaded exam files may contain repeated watermarks, page headers, page footers, QR codes, publisher names, public account names, phone numbers, page numbers, copyright notices, or user/account information.
+
+The system should not treat these repeated texts as exam questions, answer choices, answers, explanations, or materials.
+
+This is text-cleaning for parsing, not a promise to remove visual watermarks from the original PDF file.
+
+## Common Noise Examples
+
+The parser should detect and ignore repeated non-question text such as:
+
+```text
+锦宏教育微信公众号：...
+锦宏教育客服微信：...
+英语试题 第 1 页（共 10 页）
+第 1 页
+共 10 页
+发布日期：
+用户：
+邮箱：
+学号：
+声明：试题解析著作权...
+扫码获取音频
+二维码
+公众号
+客服微信
+```
+
+These texts may appear on every page or at the top/bottom of the document.
+
+## Noise Filtering Rules
+
+Before question parsing, the system should run a cleaning step:
+
+1. Detect repeated lines appearing on many pages.
+2. Detect page headers and footers.
+3. Detect page numbers.
+4. Detect publisher or platform watermarks.
+5. Detect QR-code related text.
+6. Detect phone numbers, public account IDs, emails, and user IDs when they are not part of the exam.
+7. Detect copyright or distribution declarations.
+8. Remove or ignore these lines from the parsing input.
+9. Store ignored noise lines separately if needed for audit.
+10. Never treat noise lines as question stems, options, answers, or explanations.
+
+## Visual Watermark Boundary
+
+The basic parser may ignore watermark text extracted from the PDF.
+
+However, the system should not promise to visually remove watermarks from the original PDF unless the user has the legal right to do so.
+
+For basic import:
+
+1. Keep the original uploaded file unchanged.
+2. Clean only the extracted text used for parsing.
+3. Do not generate a redistributed clean PDF.
+4. Do not remove copyright ownership statements from files intended for redistribution.
+5. If visual watermark removal is requested, mark it as a separate optional preprocessing feature requiring user authorization.
+
+## Repeated Line Detection
+
+A line may be treated as repeated noise if:
+
+1. It appears on more than one page.
+2. It contains public account, customer service, phone number, QR code, page number, or copyright language.
+3. It is outside the main question structure.
+4. Removing it does not break question numbering, options, answers, or materials.
+
+Examples of repeated noise patterns:
+
+```text
+.*微信公众号.*
+.*客服微信.*
+.*第\s*\d+\s*页.*
+.*共\s*\d+\s*页.*
+.*发布日期.*
+.*用户.*
+.*邮箱.*
+.*学号.*
+.*著作权.*
+.*未经.*同意.*
+.*不得复制.*
+```
+
+## Warning Rules for Watermark and Noise
+
+Generate warnings when:
+
+1. The file contains heavy visual watermarks that may affect OCR.
+2. Extracted text includes many repeated watermark lines.
+3. Page headers or footers are mixed with question text.
+4. Copyright or publisher statements are detected.
+5. Image watermark affects picture-based questions.
+6. Cleaning removes too much text and may affect parsing accuracy.
+
+Suggested warning codes:
+
+```text
+WATERMARK_DETECTED
+REPEATED_HEADER_FOOTER_DETECTED
+COPYRIGHT_NOTICE_DETECTED
+QR_CODE_OR_PUBLIC_ACCOUNT_TEXT_DETECTED
+IMAGE_WATERMARK_MAY_AFFECT_OCR
+NOISE_FILTERING_REVIEW_REQUIRED
+```
+
+## Never Do This
+
+The parser must not:
+
+1. Treat watermark text as a question.
+2. Treat public account text as an answer.
+3. Treat page numbers as question numbers.
+4. Treat copyright notices as reading passages.
+5. Treat phone numbers or user IDs as exam content.
+6. Delete meaningful listening text just because it repeats speaker labels.
+7. Delete paragraph labels such as A), B), C) in matching questions.
+8. Delete option labels A-O.
+9. Modify or redistribute original copyrighted files after removing watermarks.
+10. Claim visual watermark removal when only text cleaning is implemented.
 Rules:
 
 1. Extract text from PDF.
