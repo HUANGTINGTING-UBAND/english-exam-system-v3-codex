@@ -333,3 +333,150 @@ export const importQuestionsToExam = async (examId, questions) => {
 
   return parseResponse(response, '批量导入题目失败')
 }
+
+export const createTeacherClassroom = async (classroomData) => {
+  const response = await fetch(`${API_BASE_URL}/teacher/classrooms`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(classroomData),
+  })
+
+  return parseResponse(response, '创建班级失败')
+}
+
+export const getTeacherClassrooms = async () => {
+  const response = await fetch(`${API_BASE_URL}/teacher/classrooms`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取教师班级失败')
+}
+
+export const getTeacherClassroomStudents = async (classroomId) => {
+  const response = await fetch(`${API_BASE_URL}/teacher/classrooms/${classroomId}/students`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取班级学生失败')
+}
+
+export const joinStudentClassroom = async (inviteCode) => {
+  const response = await fetch(`${API_BASE_URL}/student/classrooms/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ inviteCode }),
+  })
+
+  return parseResponse(response, '加入班级失败')
+}
+
+export const getStudentAssignments = async () => {
+  const response = await fetch(`${API_BASE_URL}/student/assignments`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取我的班级任务失败')
+}
+
+export const createTeacherAssignment = async (assignmentData) => {
+  const response = await fetch(`${API_BASE_URL}/teacher/assignments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(assignmentData),
+  })
+
+  return parseResponse(response, '发布任务失败')
+}
+
+export const getTeacherAssignments = async () => {
+  const response = await fetch(`${API_BASE_URL}/teacher/assignments`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取教师任务失败')
+}
+
+export const getTeacherAssignmentSubmissions = async (assignmentId) => {
+  const response = await fetch(`${API_BASE_URL}/teacher/assignments/${assignmentId}/submissions`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取任务提交情况失败')
+}
+
+export const createImportJob = async (jobData) => {
+  const response = await fetch(`${API_BASE_URL}/import/jobs`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(jobData),
+  })
+
+  return parseResponse(response, '创建导入草稿失败')
+}
+
+export const getImportJobs = async () => {
+  const response = await fetch(`${API_BASE_URL}/import/jobs`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取导入草稿失败')
+}
+
+export const getImportJob = async (jobId) => {
+  const response = await fetch(`${API_BASE_URL}/import/jobs/${jobId}`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取导入草稿详情失败')
+}
+
+export const createSkill = async (skillData) => {
+  const response = await fetch(`${API_BASE_URL}/skills`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(skillData),
+  })
+
+  return parseResponse(response, '创建 Skill 失败')
+}
+
+export const getSkills = async () => {
+  const response = await fetch(`${API_BASE_URL}/skills`, {
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '获取 Skill 列表失败')
+}
+
+export const activateSkill = async (skillId) => {
+  const response = await fetch(`${API_BASE_URL}/skills/${skillId}/activate`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '启用 Skill 失败')
+}
+
+export const deactivateSkill = async (skillId) => {
+  const response = await fetch(`${API_BASE_URL}/skills/${skillId}/deactivate`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '停用 Skill 失败')
+}

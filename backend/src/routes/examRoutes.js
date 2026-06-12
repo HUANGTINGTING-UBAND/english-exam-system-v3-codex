@@ -39,7 +39,7 @@ const buildExamGradeWhere = ({ grade, group }) => {
 const normalizeSubmitType = (submitType) => {
   const text = String(submitType || 'MANUAL').trim().toUpperCase()
 
-  const allowedTypes = ['MANUAL', 'AUTO', 'TIMEOUT']
+  const allowedTypes = ['MANUAL', 'AUTO']
 
   if (allowedTypes.includes(text)) {
     return text
@@ -314,6 +314,10 @@ router.post('/attempts/submit', requireAuth, async (req, res) => {
       submitType: rawSubmitType,
       usedTime,
       pauseCount,
+      totalPausedDuration,
+      startedAt,
+      submittedAt,
+      assignmentId,
     } = req.body
 
     const submitType = normalizeSubmitType(rawSubmitType)
@@ -334,6 +338,33 @@ router.post('/attempts/submit', requireAuth, async (req, res) => {
       return res.status(404).json({
         message: '试卷不存在',
       })
+    }
+
+    if (assignmentId) {
+      const assignment = await prisma.assignment.findUnique({
+        where: {
+          id: assignmentId,
+        },
+      })
+
+      if (!assignment || assignment.examId !== examId) {
+        return res.status(404).json({
+          message: '班级任务不存在或不属于当前试卷',
+        })
+      }
+
+      const membership = await prisma.classStudent.findFirst({
+        where: {
+          classroomId: assignment.classroomId,
+          studentId: req.user.id,
+        },
+      })
+
+      if (!membership) {
+        return res.status(403).json({
+          message: '你不属于该任务对应班级，不能提交该任务',
+        })
+      }
     }
 
     const questions = await prisma.question.findMany({
@@ -434,6 +465,7 @@ router.post('/attempts/submit', requireAuth, async (req, res) => {
         data: {
           userId: req.user.id,
           examId,
+          assignmentId: assignmentId || null,
           objectiveScore,
           subjectiveScore,
           totalScore,
@@ -441,6 +473,9 @@ router.post('/attempts/submit', requireAuth, async (req, res) => {
           submitType,
           usedTime: Number(usedTime || 0),
           pauseCount: Number(pauseCount || 0),
+          totalPausedDuration: Number(totalPausedDuration || 0),
+          startedAt: startedAt ? new Date(startedAt) : null,
+          submittedAt: submittedAt ? new Date(submittedAt) : new Date(),
         },
       })
 
@@ -531,6 +566,18 @@ router.get('/attempts/history', requireAuth, async (req, res) => {
             totalScore: true,
           },
         },
+        assignment: {
+          select: {
+            id: true,
+            title: true,
+            classroom: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
         userAnswers: {
           include: {
             question: {
@@ -551,6 +598,9 @@ router.get('/attempts/history', requireAuth, async (req, res) => {
       return {
         id: attempt.id,
         examId: attempt.examId,
+        assignmentId: attempt.assignmentId,
+        assignmentTitle: attempt.assignment?.title || '',
+        classroomName: attempt.assignment?.classroom?.name || '',
         examTitle: attempt.exam?.title || '未知试卷',
         examGradeLevel: attempt.exam?.gradeLevel || '',
         examTotalScore: realExamTotalScore || attempt.exam?.totalScore || 0,
