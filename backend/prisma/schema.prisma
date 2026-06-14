@@ -43,6 +43,45 @@ enum SubmitType {
   AUTO
 }
 
+enum ExamSourceType {
+  PLATFORM_STANDARD
+  TEACHER_CUSTOM
+}
+
+enum ExamVisibility {
+  PUBLIC
+  PRIVATE
+  CLASS_ONLY
+}
+
+enum ExamPublishStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DiagnosisQualityLevel {
+  BASIC
+  STANDARD
+  DETAILED
+}
+
+enum ImportJobStatus {
+  DRAFT
+  PARSING
+  PROCESSING
+  PARSED
+  NEEDS_REVIEW
+  REVIEWED
+  READY
+  CONFIRMED
+  IMPORTED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id           String      @id @default(cuid())
   username     String      @unique
@@ -76,6 +115,11 @@ model Exam {
   isPublished Boolean    @default(false)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  sourceType       ExamSourceType        @default(PLATFORM_STANDARD)
+  visibility       ExamVisibility        @default(PUBLIC)
+  publishStatus    ExamPublishStatus     @default(READY)
+  diagnosisQuality DiagnosisQualityLevel @default(BASIC)
 
   questions           Question[]
   materials           QuestionMaterial[]
@@ -261,24 +305,28 @@ model WrongQuestion {
 }
 
 model ImportJob {
-  id         String   @id @default(cuid())
-  creatorId  String
-  examId     String?
-  title      String
-  status     String   @default("DRAFT")
-  sourceType String   @default("MANUAL")
-  rawText    String?
-  metadata   Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String          @id @default(cuid())
+  /// Nullable for legacy import draft rows created before v2 user ownership existed; do not make required without a backfill.
+  creatorId   String?
+  createdById String?
+  examId      String?
+  gradeLevel  GradeLevel?
+  title       String
+  status      ImportJobStatus @default(DRAFT)
+  sourceType  String          @default("MANUAL")
+  rawText     String?
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  creator   User                  @relation("ImportJobCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  creator   User?                 @relation("ImportJobCreator", fields: [creatorId], references: [id], onDelete: SetNull)
   exam      Exam?                 @relation(fields: [examId], references: [id], onDelete: SetNull)
   questions ImportDraftQuestion[]
   materials ImportDraftMaterial[]
   warnings  ImportWarning[]
 
   @@index([creatorId])
+  @@index([createdById])
   @@index([examId])
 }
 
@@ -330,9 +378,11 @@ model ImportWarning {
   importJobId String
   level       String   @default("WARNING")
   code        String?
+  field       String?
   message     String
   targetType  String?
   targetId    String?
+  isResolved  Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
