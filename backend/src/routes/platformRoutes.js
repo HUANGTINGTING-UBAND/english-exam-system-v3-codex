@@ -2,7 +2,7 @@ const express = require('express')
 const crypto = require('crypto')
 const multer = require('multer')
 const mammoth = require('mammoth')
-const pdfParseModule = require('pdf-parse')
+const { extractPdfText } = require('../utils/pdfTextExtractor')
 const prisma = require('../lib/prisma')
 const {
   requireAuth,
@@ -13,7 +13,6 @@ const {
 
 const router = express.Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
-const pdfParse = pdfParseModule.default || pdfParseModule
 
 const generateInviteCode = () => {
   return crypto.randomBytes(4).toString('hex').toUpperCase()
@@ -136,8 +135,7 @@ const extractUploadedText = async (file) => {
     return result.value || ''
   }
   if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-    const result = await pdfParse(file.buffer)
-    return result.text || ''
+    return extractPdfText(file.buffer)
   }
   return file.buffer.toString('utf8')
 }
