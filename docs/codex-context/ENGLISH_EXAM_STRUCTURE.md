@@ -137,3 +137,10 @@ Exam
 3. 实现 TXT / DOCX / PDF 解析到草稿。
 4. 增加人工校对 UI。
 5. 校对通过后再写入正式 `Exam` / `Question`，并保留向旧考试流程兼容的字段。
+
+## 9. 本轮材料展示兼容策略
+
+- 正式入库时，草稿材料写入现有 `QuestionMaterial`，题目通过 `Question.materialId` 关联材料。
+- 后端试卷详情返回 `materials`，题目列表返回每题的 `materialId` 和 `material`。
+- 前端考试页在题目关联材料时显示材料卡片；无材料题目保持原有显示和作答逻辑。
+- 更复杂的 Section、听力音频、图片题和材料多级分组仍为 `NEEDS_VERIFICATION`。

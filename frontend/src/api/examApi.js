@@ -414,6 +414,23 @@ export const getTeacherAssignmentSubmissions = async (assignmentId) => {
 }
 
 export const createImportJob = async (jobData) => {
+  const hasFile = jobData?.file
+
+  if (hasFile) {
+    const formData = new FormData()
+    formData.append('file', jobData.file)
+    if (jobData.title) formData.append('title', jobData.title)
+    if (jobData.rawText) formData.append('rawText', jobData.rawText)
+
+    const response = await fetch(`${API_BASE_URL}/import/jobs`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: formData,
+    })
+
+    return parseResponse(response, '创建导入草稿失败')
+  }
+
   const response = await fetch(`${API_BASE_URL}/import/jobs`, {
     method: 'POST',
     headers: {
@@ -479,4 +496,48 @@ export const deactivateSkill = async (skillId) => {
   })
 
   return parseResponse(response, '停用 Skill 失败')
+}
+
+export const updateImportDraftQuestion = async (questionId, questionData) => {
+  const response = await fetch(`${API_BASE_URL}/import/draft-questions/${questionId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(questionData),
+  })
+
+  return parseResponse(response, '更新草稿题目失败')
+}
+
+export const updateImportDraftMaterial = async (materialId, materialData) => {
+  const response = await fetch(`${API_BASE_URL}/import/draft-materials/${materialId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(materialData),
+  })
+
+  return parseResponse(response, '更新草稿材料失败')
+}
+
+export const resolveImportWarning = async (warningId) => {
+  const response = await fetch(`${API_BASE_URL}/import/warnings/${warningId}/resolve`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '标记 warning 失败')
+}
+
+export const confirmImportJob = async (jobId) => {
+  const response = await fetch(`${API_BASE_URL}/import/jobs/${jobId}/confirm`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+
+  return parseResponse(response, '确认入库失败')
 }

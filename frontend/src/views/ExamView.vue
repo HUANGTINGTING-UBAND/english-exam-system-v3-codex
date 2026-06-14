@@ -951,6 +951,12 @@ onBeforeUnmount(() => {
             {{ isCurrentQuestionAnswered ? '当前题：已答' : '当前题：未答' }}
           </p>
 
+          <div v-if="currentQuestion.material" class="reading-material-card">
+            <p class="tag">Question Material</p>
+            <h3>{{ currentQuestion.material.title || '阅读材料' }}</h3>
+            <p class="material-content">{{ currentQuestion.material.content || currentQuestion.material.transcript }}</p>
+          </div>
+
           <h2>{{ currentQuestion.text }}</h2>
 
           <div class="question-meta">

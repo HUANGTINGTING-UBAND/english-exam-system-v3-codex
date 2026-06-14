@@ -1,11 +1,20 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { createImportJob, getImportJob, getImportJobs } from '../api/examApi'
+import {
+  confirmImportJob,
+  createImportJob,
+  getImportJob,
+  getImportJobs,
+  resolveImportWarning,
+  updateImportDraftMaterial,
+  updateImportDraftQuestion,
+} from '../api/examApi'
 
 const jobs = ref([])
 const selectedJob = ref(null)
 const title = ref('')
 const rawText = ref('')
+const selectedFile = ref(null)
 const errorMessage = ref('')
 const successMessage = ref('')
 
@@ -13,25 +22,24 @@ const loadJobs = async () => {
   jobs.value = await getImportJobs()
 }
 
+const refreshSelectedJob = async () => {
+  if (selectedJob.value?.id) selectedJob.value = prepareJobForEdit(await getImportJob(selectedJob.value.id))
+}
+
+const handleFileChange = (event) => {
+  selectedFile.value = event.target.files?.[0] || null
+}
+
 const handleCreate = async () => {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const job = await createImportJob({
-      title: title.value,
-      rawText: rawText.value,
-      warnings: [
-        {
-          level: 'INFO',
-          code: 'MANUAL_DRAFT',
-          message: '基础版导入草稿已创建，后续版本再接入文件解析与校对入库。',
-        },
-      ],
-    })
-    successMessage.value = '导入草稿创建成功'
+    const job = await createImportJob({ title: title.value, rawText: rawText.value, file: selectedFile.value })
+    successMessage.value = '导入草稿创建成功，请校对题目、材料和 warning 后确认入库。'
     title.value = ''
     rawText.value = ''
-    selectedJob.value = job
+    selectedFile.value = null
+    selectedJob.value = prepareJobForEdit(job)
     await loadJobs()
   } catch (error) {
     errorMessage.value = error.message || '创建导入草稿失败'
@@ -39,13 +47,70 @@ const handleCreate = async () => {
 }
 
 const handleSelect = async (jobId) => {
-  selectedJob.value = await getImportJob(jobId)
+  selectedJob.value = prepareJobForEdit(await getImportJob(jobId))
+}
+
+const saveQuestion = async (question) => {
+  await updateImportDraftQuestion(question.id, {
+    text: question.text,
+    options: normalizeOptions(question.optionsText),
+    answer: normalizeAnswer(question),
+    explanation: question.explanation,
+    type: question.type,
+    score: question.score,
+    knowledgePoint: question.knowledgePoint,
+    referenceAnswer: question.referenceAnswer,
+    materialLocalId: question.materialLocalId,
+  })
+  successMessage.value = '草稿题目已保存'
+  await refreshSelectedJob()
+}
+
+const saveMaterial = async (material) => {
+  await updateImportDraftMaterial(material.id, {
+    title: material.title,
+    content: material.content,
+    type: material.type,
+    fileName: material.fileName,
+    fileUrl: material.fileUrl,
+  })
+  successMessage.value = '草稿材料已保存'
+  await refreshSelectedJob()
+}
+
+const markWarningResolved = async (warning) => {
+  await resolveImportWarning(warning.id)
+  successMessage.value = 'warning 已标记处理'
+  await refreshSelectedJob()
+}
+
+const handleConfirm = async () => {
+  const confirmed = window.confirm('确认将当前草稿生成正式试卷？生成后将出现在试卷列表或管理页面中。')
+  if (!confirmed) return
+  const result = await confirmImportJob(selectedJob.value.id)
+  successMessage.value = `确认入库成功，正式试卷 ID：${result.examId}`
+  await refreshSelectedJob()
+  await loadJobs()
+}
+
+const normalizeOptions = (value) => String(value || '').split('\n').map((item) => item.trim()).filter(Boolean)
+const normalizeAnswer = (question) => question.type === 'CHOICE' ? Number(question.answerText) : question.answerText
+
+const prepareJobForEdit = (job) => {
+  if (!job) return job
+  return {
+    ...job,
+    questions: (job.questions || []).map((question) => ({
+      ...question,
+      optionsText: Array.isArray(question.options) ? question.options.join('\n') : '',
+      answerText: question.answer ?? '',
+      materialLocalId: question.metadata?.materialLocalId || '',
+    })),
+  }
 }
 
 onMounted(() => {
-  loadJobs().catch((error) => {
-    errorMessage.value = error.message || '导入草稿加载失败'
-  })
+  loadJobs().catch((error) => { errorMessage.value = error.message || '导入草稿加载失败' })
 })
 </script>
 
@@ -53,48 +118,42 @@ onMounted(() => {
   <div class="admin-page">
     <section class="admin-hero-card">
       <p class="tag">Import Draft</p>
-      <h1>导入草稿</h1>
-      <p>本轮提供基础草稿创建与 warning 展示，不直接写入正式题库。</p>
+      <h1>导入草稿校对与确认入库</h1>
+      <p>上传 TXT / DOCX / 文字型 PDF 或粘贴文本后，系统只生成导入草稿；人工校对后再确认生成正式试卷。</p>
     </section>
 
     <div v-if="errorMessage" class="api-warning">{{ errorMessage }}</div>
     <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
 
     <section class="admin-section-card">
-      <h2>创建基础草稿</h2>
+      <h2>创建导入任务</h2>
       <label>草稿标题<input v-model="title" type="text" placeholder="例如：八年级期末试卷导入草稿" /></label>
-      <label>原始文本<textarea v-model="rawText" rows="8" placeholder="可粘贴试卷文本，复杂解析后续迭代"></textarea></label>
-      <button class="primary-btn" @click="handleCreate">创建草稿</button>
+      <label>上传文件<input type="file" accept=".txt,.docx,.pdf,text/plain,application/pdf" @change="handleFileChange" /></label>
+      <label>或粘贴原始文本<textarea v-model="rawText" rows="10" placeholder="支持 [MATERIAL] / [QUESTION] 标准格式，也兼容基础题号、选项、答案格式"></textarea></label>
+      <button class="primary-btn" @click="handleCreate">生成导入草稿</button>
     </section>
 
     <section class="admin-section-card">
-      <h2>草稿列表</h2>
+      <h2>导入任务列表</h2>
       <div v-if="jobs.length === 0" class="empty-state">暂无导入草稿。</div>
-      <div v-else class="admin-table-wrap">
-        <table class="admin-table">
-          <thead><tr><th>标题</th><th>状态</th><th>题目</th><th>材料</th><th>警告</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr v-for="job in jobs" :key="job.id">
-              <td>{{ job.title }}</td>
-              <td>{{ job.status }}</td>
-              <td>{{ job._count?.questions || 0 }}</td>
-              <td>{{ job._count?.materials || 0 }}</td>
-              <td>{{ job._count?.warnings || 0 }}</td>
-              <td><button class="secondary-btn" @click="handleSelect(job.id)">查看</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <div v-else class="admin-table-wrap"><table class="admin-table"><thead><tr><th>标题</th><th>状态</th><th>创建者</th><th>题目</th><th>材料</th><th>警告</th><th>操作</th></tr></thead><tbody>
+        <tr v-for="job in jobs" :key="job.id"><td>{{ job.title }}</td><td>{{ job.status }}</td><td>{{ job.creator?.nickname || job.creator?.username || '-' }}</td><td>{{ job._count?.questions || 0 }}</td><td>{{ job._count?.materials || 0 }}</td><td>{{ job._count?.warnings || 0 }}</td><td><button class="secondary-btn" @click="handleSelect(job.id)">校对</button></td></tr>
+      </tbody></table></div>
     </section>
 
     <section v-if="selectedJob" class="admin-section-card">
-      <h2>草稿详情：{{ selectedJob.title }}</h2>
+      <div class="section-header-row"><h2>草稿详情：{{ selectedJob.title }}</h2><button class="primary-btn" @click="handleConfirm">确认入库</button></div>
+
       <h3>Warnings</h3>
-      <ul class="simple-list">
-        <li v-for="warning in selectedJob.warnings" :key="warning.id">[{{ warning.level }}] {{ warning.message }}</li>
-      </ul>
-      <h3>原始文本预览</h3>
-      <pre>{{ selectedJob.rawText || '暂无原始文本' }}</pre>
+      <ul class="simple-list"><li v-for="warning in selectedJob.warnings" :key="warning.id">[{{ warning.level }}] {{ warning.code }} - {{ warning.message }} <span v-if="warning.isResolved">（已处理）</span><button v-else class="secondary-btn" @click="markWarningResolved(warning)">标记已处理</button></li></ul>
+
+      <h3>草稿材料</h3>
+      <div v-for="material in selectedJob.materials" :key="material.id" class="admin-form-card"><label>材料标题<input v-model="material.title" /></label><label>材料类型<input v-model="material.type" /></label><label>正文<textarea v-model="material.content" rows="5"></textarea></label><button class="secondary-btn" @click="saveMaterial(material)">保存材料</button></div>
+
+      <h3>草稿题目</h3>
+      <div v-for="question in selectedJob.questions" :key="question.id" class="admin-form-card"><label>题型<select v-model="question.type"><option>CHOICE</option><option>READING</option><option>CLOZE</option><option>TRANSLATION</option><option>WRITING</option><option>ERROR_CORRECTION</option></select></label><label>题干<textarea v-model="question.text" rows="3"></textarea></label><label>选项（每行一个）<textarea v-model="question.optionsText" rows="4"></textarea></label><label>答案（选择题填 0/1/2/3）<input v-model="question.answerText" /></label><label>解析<textarea v-model="question.explanation" rows="2"></textarea></label><label>知识点<input v-model="question.knowledgePoint" /></label><label>分值<input v-model.number="question.score" type="number" min="0" /></label><label>材料ID<input v-model="question.materialLocalId" placeholder="如 reading-001" /></label><button class="secondary-btn" @click="saveQuestion(question)">保存题目</button></div>
+
+      <h3>原始文本预览</h3><pre>{{ selectedJob.rawText || '暂无原始文本' }}</pre>
     </section>
   </div>
 </template>

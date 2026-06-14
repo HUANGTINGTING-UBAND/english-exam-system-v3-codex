@@ -240,3 +240,10 @@ backend
 3. 设计并迁移 `ImportDraft`、`ImportDraftFile`、`ImportDraftQuestion` 等表。
 4. 做管理员导入草稿列表和校对页面。
 5. 校对通过后写入当前 `Exam` / `Question`，并为未来材料模型预留字段。
+
+## 9. 本轮导入草稿主链路更新
+
+- 已新增基础导入草稿主链路：教师 / 管理员可创建 `ImportJob`，解析结果进入 `ImportDraftQuestion`、`ImportDraftMaterial`、`ImportWarning`，不直接写入正式 `Exam` / `Question`。
+- 已新增校对后确认入库接口，将草稿生成正式 `Exam`、`Question`、`QuestionMaterial`，并保留 `ImportJob.examId` 追溯关系。
+- 基础解析覆盖 TXT / DOCX / 文字型 PDF 的文本提取；扫描版 PDF、OCR、图片题、音频持久化仍为 `NEEDS_VERIFICATION`。
+- 教师仅能查看和确认自己创建的导入任务；管理员可查看全部导入任务；学生不能访问导入草稿接口。

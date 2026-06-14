@@ -252,3 +252,10 @@ D. 8:30
 3. 当前 schema 无草稿、素材、Section、题组模型。
 4. PDF / DOCX 的图片、表格、扫描件支持不足，需要明确边界。
 5. AI 解析接口依赖环境变量和外部网络，必须提供非 AI 兜底解析与人工校对。
+
+## 8. 本轮基础实现说明
+
+- `POST /api/import/jobs` 支持 JSON 原始文本和 multipart `file` 上传创建导入草稿，文件优先支持 TXT / DOCX / 文字型 PDF。
+- 解析器会尝试识别试卷标题、考试类型、总分、时长、`[MATERIAL]`、`[QUESTION]`、题号、题型、题干、A/B/C/D 选项、答案、解析、知识点、分值、材料ID。
+- 无法判断题型时默认 `CHOICE`，并生成 `UNKNOWN_QUESTION_TYPE` warning；选择题缺少答案、选项不足、材料绑定不确定等均生成 warning。
+- `POST /api/import/jobs/:id/confirm` 是唯一从草稿进入正式试卷的入口。

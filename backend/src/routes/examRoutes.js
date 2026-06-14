@@ -179,6 +179,9 @@ router.get('/exams', async (req, res) => {
             score: true,
           },
         },
+        materials: {
+          orderBy: { orderIndex: 'asc' },
+        },
       },
     })
 
@@ -230,6 +233,9 @@ router.get('/exams/:examId', async (req, res) => {
             score: true,
           },
         },
+        materials: {
+          orderBy: { orderIndex: 'asc' },
+        },
       },
     })
 
@@ -255,6 +261,7 @@ router.get('/exams/:examId', async (req, res) => {
         isPublished: exam.isPublished,
         createdAt: exam.createdAt,
         updatedAt: exam.updatedAt,
+        materials: exam.materials || [],
       },
     })
   } catch (error) {
@@ -289,6 +296,9 @@ router.get('/exams/:examId/questions', async (req, res) => {
       },
       orderBy: {
         orderIndex: 'asc',
+      },
+      include: {
+        material: true,
       },
     })
 

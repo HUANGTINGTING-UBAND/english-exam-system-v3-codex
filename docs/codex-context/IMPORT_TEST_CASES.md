@@ -179,3 +179,11 @@ backend/src/services/importValidator.js
 - 主观题被错误当作选择题。
 - 答案解析文本被误切进题干。
 - 删除 / 覆盖试卷题目时影响已有考试记录。
+
+## 10. 本轮手工验收补充
+
+1. 使用标准 TXT 样例调用 `POST /api/import/jobs`，应生成 `ImportJob`、2 道 `ImportDraftQuestion` 和至少源文件 / 校对相关 warning。
+2. 在 `/import-drafts` 页面选择草稿，编辑题干、选项、答案、解析、题型、分值后保存。
+3. 编辑材料标题和正文后保存，并将 warning 标记为已处理。
+4. 点击“确认入库”后，应生成正式 `Exam`、`Question`、`QuestionMaterial`，导入任务状态变为 `IMPORTED`。
+5. 学生从普通试卷列表打开导入生成的试卷时，不携带 `assignmentId` 也应可正常开始和提交考试。
