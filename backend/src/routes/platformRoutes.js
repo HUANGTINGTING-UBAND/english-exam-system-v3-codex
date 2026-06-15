@@ -84,13 +84,77 @@ const stripQuestionNumberPrefix = (block) => {
 
 const optionMarkerPattern = '[A-D](?:[\\.．、\\)]\\s*|\\s+)'
 const firstOptionRegex = new RegExp(`(?:^|\\s)${optionMarkerPattern}`, 'm')
+const instructionLineRegex = /(?:注意事项|考试说明|答题说明|听力测试现在开始|听力材料|录音材料|请听|听下面|回答第|答题卡|涂改液|最佳选项|每段对话|每段材料|本试卷|本题共|小题|满分|时量|页|PAGE|共\s*\d+\s*页)/i
+const exampleRegex = /(?:例题|例如|例[:：]|答案是\s*[A-D]|答案为\s*[A-D])/i
+
+const normalizeImportRawText = (rawText) => {
+  return String(rawText || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[\t\u00a0]+/g, ' ')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !/^[-—_\s]*\d+\s*[-—_\s]*$/.test(line))
+    .filter((line) => !instructionLineRegex.test(line))
+    .join('\n')
+}
+
+const getAnswerIndexFromLetter = (letter) => {
+  return answerLetterMap[String(letter || '').trim().toUpperCase()] ?? null
+}
+
+const parseAnswerMap = (rawText) => {
+  const answerMap = new Map()
+  const text = String(rawText || '').replace(/\r\n/g, '\n')
+  const compactRangeRegex = /(?:^|\n|\s)(\d{1,3})\s*[-—–至到]\s*(\d{1,3})\s*[:：]?\s*([A-D]{2,})\b/g
+  let match = compactRangeRegex.exec(text)
+
+  while (match) {
+    const start = Number(match[1])
+    const end = Number(match[2])
+    const letters = match[3].split('')
+
+    for (let offset = 0; offset <= end - start && offset < letters.length; offset += 1) {
+      answerMap.set(String(start + offset), getAnswerIndexFromLetter(letters[offset]))
+    }
+
+    match = compactRangeRegex.exec(text)
+  }
+
+  const pairRegex = /(?:^|\n|\s)(\d{1,3})\s*(?:[\.．、\)]\s*)?([A-D])(?=\s|\n|$)/g
+  match = pairRegex.exec(text)
+
+  while (match) {
+    const questionNo = String(Number(match[1]))
+
+    if (!answerMap.has(questionNo)) {
+      answerMap.set(questionNo, getAnswerIndexFromLetter(match[2]))
+    }
+
+    match = pairRegex.exec(text)
+  }
+
+  return answerMap
+}
+
+const isExampleQuestionBlock = (block) => {
+  return exampleRegex.test(block)
+}
+
+const isChoiceLikeQuestion = (text, options) => {
+  if (options.length >= 3) {
+    return true
+  }
+
+  return /[?？]$/.test(String(text || '').trim()) && options.length > 0
+}
+
 
 const splitQuestionBlocks = (rawText) => {
   if (rawText.includes('[QUESTION]')) {
     return rawText.split(/\[QUESTION\]/i).slice(1)
   }
 
-  const normalizedText = rawText.replace(/\r\n/g, '\n')
+  const normalizedText = normalizeImportRawText(rawText)
   const markerRegex = /(^|\n)\s*(?:第\s*)?(\d{1,3})\s*(?:题)?[\.．、\)]?\s*/g
   const markers = []
   let match = markerRegex.exec(normalizedText)
@@ -99,7 +163,7 @@ const splitQuestionBlocks = (rawText) => {
     const lineStart = match.index + match[1].length
     const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 180)
 
-    if (/^[A-D][\.．、\)]?\s/.test(afterMarker)) {
+    if (/^[A-D][\.．、\)]?\s/.test(afterMarker) || exampleRegex.test(afterMarker)) {
       match = markerRegex.exec(normalizedText)
       continue
     }
@@ -180,9 +244,23 @@ const parseImportText = (rawText, fallbackTitle) => {
   })
 
   const questionBlocks = splitQuestionBlocks(rawText)
+  const answerMap = parseAnswerMap(rawText)
+  const seenQuestionNumbers = new Set()
+  const questions = []
 
-  const questions = questionBlocks.map((block, index) => {
+  questionBlocks.forEach((block, index) => {
     const questionNo = getQuestionNumberFromBlock(block, index)
+    if (isExampleQuestionBlock(block)) {
+      return
+    }
+
+    if (seenQuestionNumbers.has(questionNo)) {
+      warnings.push({ level: 'WARNING', code: 'DUPLICATE_QUESTION_NUMBER', message: `第 ${questionNo} 题重复出现，已跳过重复草稿题。`, targetType: 'QUESTION' })
+      return
+    }
+
+    seenQuestionNumbers.add(questionNo)
+
     const hasExplicitType = Boolean(block.match(/题型[:：]\s*(.+)/)?.[1])
     const type = hasExplicitType ? normalizeDraftQuestionType(block.match(/题型[:：]\s*(.+)/)?.[1], warnings, `第 ${questionNo} 题`) : 'CHOICE'
     const text = parseQuestionText(block)
@@ -197,22 +275,26 @@ const parseImportText = (rawText, fallbackTitle) => {
     const inlineOptions = parseInlineOptions(block)
     const options = inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions
     const answerRaw = block.match(/(?:答案|参考答案)[:：]\s*(.+)/)?.[1]?.trim() || ''
-    const answer = type === 'CHOICE' ? (answerLetterMap[answerRaw.toUpperCase()] ?? null) : answerRaw
+    const mappedAnswer = answerMap.get(questionNo)
+    const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : answerRaw
     const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || 2
     const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || null
 
-    if (type === 'CHOICE' && options.length < 3) warnings.push({ level: 'WARNING', code: 'CHOICE_OPTIONS_INCOMPLETE', message: `第 ${questionNo} 题选项少于 3 个，请人工校对。`, targetType: 'QUESTION' })
-    if (type === 'CHOICE' && answer === null) warnings.push({ level: 'WARNING', code: 'MISSING_CHOICE_ANSWER', message: `第 ${questionNo} 题没有可用客观题答案，请人工补充。`, targetType: 'QUESTION' })
+    const choiceLike = isChoiceLikeQuestion(text, options)
+
+    if (type === 'CHOICE' && options.length > 0 && options.length < 3) warnings.push({ level: 'WARNING', code: 'CHOICE_OPTIONS_INCOMPLETE', message: `第 ${questionNo} 题选项少于 3 个，请人工校对。`, targetType: 'QUESTION' })
+    if (type === 'CHOICE' && options.length === 0) warnings.push({ level: 'WARNING', code: 'NON_CHOICE_LIKE_QUESTION', message: `第 ${questionNo} 题未识别到选项，已保留为安全草稿题，请人工确认题型和答案。`, targetType: 'QUESTION' })
+    if (type === 'CHOICE' && choiceLike && answer === null) warnings.push({ level: 'WARNING', code: 'MISSING_CHOICE_ANSWER', message: `第 ${questionNo} 题没有可用客观题答案，请人工补充。`, targetType: 'QUESTION' })
     if (materialLocalId && !materialIdMap.has(materialLocalId)) warnings.push({ level: 'WARNING', code: 'MATERIAL_BINDING_UNCERTAIN', message: `第 ${questionNo} 题引用的材料 ${materialLocalId} 未找到，入库前请确认。`, targetType: 'QUESTION' })
 
-    return {
+    questions.push({
       type, text: text || '待校对题目', options: options.length ? options : null, answer, score,
       knowledgePoint: block.match(/知识点[:：]\s*(.+)/)?.[1]?.trim() || '未分类',
       referenceAnswer: type === 'CHOICE' ? '' : answerRaw,
       explanation: block.match(/解析[:：]\s*(.+)/)?.[1]?.trim() || '',
       orderIndex: Number(questionNo) || index + 1,
       metadata: { questionNo, materialLocalId },
-    }
+    })
   })
 
   if (questions.length === 0) {

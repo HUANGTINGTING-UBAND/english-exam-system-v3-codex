@@ -266,3 +266,10 @@ D. 8:30
 - 选择题选项支持 `A.`、`A．`、`A、`、`A)`，并允许 A/B/C/D 或 A/B/C 在同一行排列。
 - 听力选择题允许只有 A/B/C 三个选项；少于 3 个选项才生成选项不完整 warning。
 - 已提取 rawText 但未识别题目时，导入任务保持 `NEEDS_REVIEW`，生成 `RAW_TEXT_UNRECOGNIZED` warning，便于人工编辑 rawText 后重新解析。
+
+## 10. 本轮真实 PDF 说明过滤与答案区增强
+
+- PDF rawText 解析前会过滤常见考试说明、注意事项、答题说明、页码、听力说明、例题和 `答案是 B` 等示例内容，避免污染正式草稿题。
+- 未带选项的题块不再强制按完整选择题校验；系统保留安全草稿并生成 `NON_CHOICE_LIKE_QUESTION` warning，后续需人工确认题型。
+- 重复题号会跳过重复草稿题，并生成 `DUPLICATE_QUESTION_NUMBER` warning。
+- 答案区支持 `1-5 ABCDA`、`1. A 2. B`、`1 A` 等基础格式，并回填选择题答案。

@@ -198,3 +198,10 @@ A. To the hospital.  B. To the library.  C. To the hotel.
 ```
 
 预期：生成 2 道 `CHOICE` 草稿题，每题 3 个选项；无答案时生成 `MISSING_CHOICE_ANSWER` warning；任务状态保持 `NEEDS_REVIEW`。
+
+## 12. 本轮真实 PDF 噪声过滤验收补充
+
+- 输入包含“答题卡上不得使用涂改液”“B、C 三个选项中选出最佳选项”等说明文字时，不应将这些内容作为第 1 题题干或选项。
+- 输入包含例题 `How much is T-shirt? A. ¥30 B. ¥50 C. ¥70 答案是 B。` 时，不应生成正式草稿题。
+- 输入重复题号时，应跳过重复草稿题并生成 `DUPLICATE_QUESTION_NUMBER` warning。
+- 输入 `1-5 ABCDA` 或 `1. A 2. B` 答案区时，应回填对应选择题 answer。
