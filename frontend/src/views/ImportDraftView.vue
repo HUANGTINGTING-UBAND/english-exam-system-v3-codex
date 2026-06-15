@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   confirmImportJob,
   createImportJob,
@@ -18,6 +18,18 @@ const rawText = ref('')
 const selectedFile = ref(null)
 const errorMessage = ref('')
 const successMessage = ref('')
+
+const materialGroups = computed(() => {
+  if (!selectedJob.value) return []
+
+  return (selectedJob.value.materials || []).map((material) => {
+    const localId = material.metadata?.localId
+    return {
+      material,
+      questions: (selectedJob.value.questions || []).filter((question) => question.materialLocalId === localId),
+    }
+  }).filter((group) => group.questions.length > 0)
+})
 
 const loadJobs = async () => {
   jobs.value = await getImportJobs()
@@ -118,6 +130,7 @@ const prepareJobForEdit = (job) => {
       optionsText: Array.isArray(question.options) ? question.options.join('\n') : '',
       answerText: question.answer ?? '',
       materialLocalId: question.metadata?.materialLocalId || '',
+      typeHint: question.metadata?.typeHint || 'choice',
     })),
   }
 }
@@ -168,8 +181,16 @@ onMounted(() => {
       <h3>草稿材料</h3>
       <div v-for="material in selectedJob.materials" :key="material.id" class="admin-form-card"><label>材料标题<input v-model="material.title" /></label><label>材料类型<input v-model="material.type" /></label><label>正文<textarea v-model="material.content" rows="5"></textarea></label><button class="secondary-btn" @click="saveMaterial(material)">保存材料</button></div>
 
+      <h3>材料题组预览</h3>
+      <div v-if="materialGroups.length === 0" class="empty-state">暂无材料题组。</div>
+      <div v-for="group in materialGroups" :key="group.material.id" class="admin-form-card">
+        <h4>{{ group.material.title || '材料' }}（{{ group.material.metadata?.localId }}）</h4>
+        <p class="material-content">{{ group.material.content }}</p>
+        <p class="question-meta">关联题目：{{ group.questions.map((question) => question.metadata?.questionNo || question.orderIndex).join('、') }}</p>
+      </div>
+
       <h3>草稿题目</h3>
-      <div v-for="question in selectedJob.questions" :key="question.id" class="admin-form-card"><label>题型<select v-model="question.type"><option>CHOICE</option><option>READING</option><option>CLOZE</option><option>TRANSLATION</option><option>WRITING</option><option>ERROR_CORRECTION</option></select></label><label>题干<textarea v-model="question.text" rows="3"></textarea></label><label>选项（每行一个）<textarea v-model="question.optionsText" rows="4"></textarea></label><label>答案（选择题填 0/1/2/3）<input v-model="question.answerText" /></label><label>解析<textarea v-model="question.explanation" rows="2"></textarea></label><label>知识点<input v-model="question.knowledgePoint" /></label><label>分值<input v-model.number="question.score" type="number" min="0" /></label><label>材料ID<input v-model="question.materialLocalId" placeholder="如 reading-001" /></label><button class="secondary-btn" @click="saveQuestion(question)">保存题目</button></div>
+      <div v-for="question in selectedJob.questions" :key="question.id" class="admin-form-card"><p class="question-meta"><span>真实题型：{{ question.typeHint }}</span><span>题号：{{ question.metadata?.questionNo || question.orderIndex }}</span></p><label>题型<select v-model="question.type"><option>CHOICE</option><option>READING</option><option>CLOZE</option><option>TRANSLATION</option><option>WRITING</option><option>ERROR_CORRECTION</option></select></label><label>题干<textarea v-model="question.text" rows="3"></textarea></label><label v-if="['CHOICE', 'CLOZE'].includes(question.type)">选项（每行一个）<textarea v-model="question.optionsText" rows="4"></textarea></label><label>答案（选择题填 0/1/2/3）<input v-model="question.answerText" /></label><label>解析<textarea v-model="question.explanation" rows="2"></textarea></label><label>知识点<input v-model="question.knowledgePoint" /></label><label>分值<input v-model.number="question.score" type="number" min="0" /></label><label>材料ID<input v-model="question.materialLocalId" placeholder="如 reading-001" /></label><button class="secondary-btn" @click="saveQuestion(question)">保存题目</button></div>
 
     </section>
   </div>

@@ -273,3 +273,9 @@ D. 8:30
 - 未带选项的题块不再强制按完整选择题校验；系统保留安全草稿并生成 `NON_CHOICE_LIKE_QUESTION` warning，后续需人工确认题型。
 - 重复题号会跳过重复草稿题，并生成 `DUPLICATE_QUESTION_NUMBER` warning。
 - 答案区支持 `1-5 ABCDA`、`1. A 2. B`、`1 A` 等基础格式，并回填选择题答案。
+
+## 11. 本轮整卷结构解析增强
+
+- 非标准 PDF rawText 会尝试从上下文识别 `listening`、`reading`、`cloze`、`fill_blank`、`translation`、`writing` 等 `typeHint`，并映射到当前 Prisma 已存在的安全题型。
+- 阅读理解和完形填空上下文中的长文本会被抽为 `ImportDraftMaterial`，题目通过 `metadata.materialLocalId` 关联；边界不确定时生成 `MATERIAL_GROUP_UNCERTAIN` warning。
+- 翻译、写作、语法/短文填空不再按完整选择题强制校验选项，答案区可回填 `referenceAnswer` 或 `explanation`，不确定时保留 warning 供人工校对。

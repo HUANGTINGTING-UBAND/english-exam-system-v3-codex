@@ -148,10 +148,69 @@ const isChoiceLikeQuestion = (text, options) => {
   return /[?？]$/.test(String(text || '').trim()) && options.length > 0
 }
 
+const detectTypeHintFromContext = (text) => {
+  const value = String(text || '')
+
+  if (/书面表达|写作|作文/i.test(value)) return { type: 'WRITING', typeHint: 'writing' }
+  if (/翻译|英汉互译|汉译英|英译汉/i.test(value)) return { type: 'TRANSLATION', typeHint: 'translation' }
+  if (/语法填空|短文填空|综合填空|填空/i.test(value)) return { type: 'CLOZE', typeHint: 'fill_blank' }
+  if (/完形填空|完形/i.test(value)) return { type: 'CLOZE', typeHint: 'cloze' }
+  if (/阅读理解|阅读|短文理解/i.test(value)) return { type: 'CHOICE', typeHint: 'reading' }
+  if (/听力|对话|录音/i.test(value)) return { type: 'CHOICE', typeHint: 'listening' }
+
+  return { type: 'CHOICE', typeHint: 'choice' }
+}
+
+const getContextBeforeQuestion = (rawText, index) => {
+  return rawText.slice(Math.max(0, index - 900), index)
+}
+
+const cleanMaterialText = (text) => {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !instructionLineRegex.test(line))
+    .filter((line) => !exampleRegex.test(line))
+    .join('\n')
+    .trim()
+}
+
+const looksLikeMaterialText = (text) => {
+  const value = cleanMaterialText(text)
+  return value.length >= 120 && /[a-zA-Z]/.test(value)
+}
+
+const parseAnswerDetails = (rawText) => {
+  const detailMap = new Map()
+  const answerStart = String(rawText || '').search(/答案与解析|参考答案|答案|解析/)
+
+  if (answerStart < 0) {
+    return detailMap
+  }
+
+  const text = String(rawText || '').slice(answerStart)
+  const itemRegex = /(?:^|\n|\s)(\d{1,3})\s*(?:[\.．、\)]\s*)([\s\S]*?)(?=(?:\n|\s)\d{1,3}\s*(?:[\.．、\)]\s*)|$)/g
+  let match = itemRegex.exec(text)
+
+  while (match) {
+    const questionNo = String(Number(match[1]))
+    const value = String(match[2] || '').trim()
+
+    if (value && !detailMap.has(questionNo)) {
+      detailMap.set(questionNo, value)
+    }
+
+    match = itemRegex.exec(text)
+  }
+
+  return detailMap
+}
+
 
 const splitQuestionBlocks = (rawText) => {
   if (rawText.includes('[QUESTION]')) {
-    return rawText.split(/\[QUESTION\]/i).slice(1)
+    return rawText.split(/\[QUESTION\]/i).slice(1).map((block) => ({ block, materialText: '', typeHint: 'choice' }))
   }
 
   const normalizedText = normalizeImportRawText(rawText)
@@ -161,15 +220,17 @@ const splitQuestionBlocks = (rawText) => {
 
   while (match) {
     const lineStart = match.index + match[1].length
-    const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 180)
+    const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 220)
 
     if (/^[A-D][\.．、\)]?\s/.test(afterMarker) || exampleRegex.test(afterMarker)) {
       match = markerRegex.exec(normalizedText)
       continue
     }
 
-    if (/[?？]|\b(?:what|where|when|who|which|why|how|is|are|do|does|did|can|could|would|will|should)\b/i.test(afterMarker)) {
-      markers.push({ index: lineStart })
+    if (/[?？]|\b(?:what|where|when|who|which|why|how|is|are|do|does|did|can|could|would|will|should|write|translate|fill)\b/i.test(afterMarker) || /翻译|写作|作文|填空/.test(afterMarker)) {
+      const context = getContextBeforeQuestion(normalizedText, lineStart)
+      const detected = detectTypeHintFromContext(context)
+      markers.push({ index: lineStart, context, detected })
     }
 
     match = markerRegex.exec(normalizedText)
@@ -177,7 +238,18 @@ const splitQuestionBlocks = (rawText) => {
 
   return markers.map((marker, index) => {
     const nextMarker = markers[index + 1]
-    return normalizedText.slice(marker.index, nextMarker ? nextMarker.index : normalizedText.length).trim()
+    const previousMarker = markers[index - 1]
+    const block = normalizedText.slice(marker.index, nextMarker ? nextMarker.index : normalizedText.length).trim()
+    const prefixStart = previousMarker ? previousMarker.index : Math.max(0, marker.index - 1200)
+    const prefix = normalizedText.slice(prefixStart, marker.index).trim()
+    const materialText = ['reading', 'cloze'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix) ? cleanMaterialText(prefix) : ''
+
+    return {
+      block,
+      materialText,
+      typeHint: marker.detected.typeHint,
+      detectedType: marker.detected.type,
+    }
   })
 }
 
@@ -245,10 +317,16 @@ const parseImportText = (rawText, fallbackTitle) => {
 
   const questionBlocks = splitQuestionBlocks(rawText)
   const answerMap = parseAnswerMap(rawText)
+  const answerDetailMap = parseAnswerDetails(rawText)
   const seenQuestionNumbers = new Set()
   const questions = []
 
-  questionBlocks.forEach((block, index) => {
+  let currentMaterialLocalId = null
+
+  questionBlocks.forEach((questionEntry, index) => {
+    const block = typeof questionEntry === 'string' ? questionEntry : questionEntry.block
+    const inferredType = typeof questionEntry === 'string' ? { type: 'CHOICE', typeHint: 'choice' } : { type: questionEntry.detectedType || 'CHOICE', typeHint: questionEntry.typeHint || 'choice' }
+    const materialText = typeof questionEntry === 'string' ? '' : questionEntry.materialText
     const questionNo = getQuestionNumberFromBlock(block, index)
     if (isExampleQuestionBlock(block)) {
       return
@@ -261,8 +339,21 @@ const parseImportText = (rawText, fallbackTitle) => {
 
     seenQuestionNumbers.add(questionNo)
 
+    if (materialText) {
+      currentMaterialLocalId = `${inferredType.typeHint || 'material'}-${materials.length + 1}`
+      materials.push({
+        localId: currentMaterialLocalId,
+        type: inferredType.typeHint === 'cloze' ? 'CLOZE_TEXT' : 'TEXT',
+        title: inferredType.typeHint === 'cloze' ? `完形填空材料 ${materials.length + 1}` : `阅读材料 ${materials.length + 1}`,
+        content: materialText,
+        orderIndex: materials.length + 1,
+      })
+      materialIdMap.set(currentMaterialLocalId, materials[materials.length - 1])
+      warnings.push({ level: 'WARNING', code: 'MATERIAL_GROUP_UNCERTAIN', message: `第 ${questionNo} 题前识别到材料文本，已按 ${currentMaterialLocalId} 关联，请人工确认材料边界。`, targetType: 'MATERIAL' })
+    }
+
     const hasExplicitType = Boolean(block.match(/题型[:：]\s*(.+)/)?.[1])
-    const type = hasExplicitType ? normalizeDraftQuestionType(block.match(/题型[:：]\s*(.+)/)?.[1], warnings, `第 ${questionNo} 题`) : 'CHOICE'
+    const type = hasExplicitType ? normalizeDraftQuestionType(block.match(/题型[:：]\s*(.+)/)?.[1], warnings, `第 ${questionNo} 题`) : inferredType.type
     const text = parseQuestionText(block)
 
     if (!text) {
@@ -275,25 +366,27 @@ const parseImportText = (rawText, fallbackTitle) => {
     const inlineOptions = parseInlineOptions(block)
     const options = inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions
     const answerRaw = block.match(/(?:答案|参考答案)[:：]\s*(.+)/)?.[1]?.trim() || ''
+    const answerDetail = answerDetailMap.get(questionNo) || ''
     const mappedAnswer = answerMap.get(questionNo)
-    const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : answerRaw
+    const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : (answerRaw || answerDetail)
     const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || 2
-    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || null
+    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'cloze'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
 
     const choiceLike = isChoiceLikeQuestion(text, options)
 
     if (type === 'CHOICE' && options.length > 0 && options.length < 3) warnings.push({ level: 'WARNING', code: 'CHOICE_OPTIONS_INCOMPLETE', message: `第 ${questionNo} 题选项少于 3 个，请人工校对。`, targetType: 'QUESTION' })
     if (type === 'CHOICE' && options.length === 0) warnings.push({ level: 'WARNING', code: 'NON_CHOICE_LIKE_QUESTION', message: `第 ${questionNo} 题未识别到选项，已保留为安全草稿题，请人工确认题型和答案。`, targetType: 'QUESTION' })
+    if (!['choice', 'listening', 'reading'].includes(inferredType.typeHint) && type === 'CHOICE') warnings.push({ level: 'WARNING', code: 'UNKNOWN_QUESTION_TYPE_SAFE_FALLBACK', message: `第 ${questionNo} 题疑似 ${inferredType.typeHint}，当前使用安全题型保存，请人工确认。`, targetType: 'QUESTION' })
     if (type === 'CHOICE' && choiceLike && answer === null) warnings.push({ level: 'WARNING', code: 'MISSING_CHOICE_ANSWER', message: `第 ${questionNo} 题没有可用客观题答案，请人工补充。`, targetType: 'QUESTION' })
     if (materialLocalId && !materialIdMap.has(materialLocalId)) warnings.push({ level: 'WARNING', code: 'MATERIAL_BINDING_UNCERTAIN', message: `第 ${questionNo} 题引用的材料 ${materialLocalId} 未找到，入库前请确认。`, targetType: 'QUESTION' })
 
     questions.push({
       type, text: text || '待校对题目', options: options.length ? options : null, answer, score,
       knowledgePoint: block.match(/知识点[:：]\s*(.+)/)?.[1]?.trim() || '未分类',
-      referenceAnswer: type === 'CHOICE' ? '' : answerRaw,
-      explanation: block.match(/解析[:：]\s*(.+)/)?.[1]?.trim() || '',
+      referenceAnswer: type === 'CHOICE' ? '' : (answerRaw || answerDetail),
+      explanation: block.match(/解析[:：]\s*(.+)/)?.[1]?.trim() || (type === 'CHOICE' ? answerDetail.replace(/^[A-D]\b[.．、)]?\s*/, '') : ''),
       orderIndex: Number(questionNo) || index + 1,
-      metadata: { questionNo, materialLocalId },
+      metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint },
     })
   })
 

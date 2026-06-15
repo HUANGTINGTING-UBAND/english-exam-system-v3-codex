@@ -205,3 +205,10 @@ A. To the hospital.  B. To the library.  C. To the hotel.
 - 输入包含例题 `How much is T-shirt? A. ¥30 B. ¥50 C. ¥70 答案是 B。` 时，不应生成正式草稿题。
 - 输入重复题号时，应跳过重复草稿题并生成 `DUPLICATE_QUESTION_NUMBER` warning。
 - 输入 `1-5 ABCDA` 或 `1. A 2. B` 答案区时，应回填对应选择题 answer。
+
+## 13. 本轮整卷结构解析验收补充
+
+- 阅读理解长文章应只生成一个草稿材料，多道阅读选择题通过 `materialLocalId` 关联该材料。
+- 完形填空短文应只生成一个草稿材料，空号题记录 `typeHint: cloze`。
+- 翻译题、写作题、填空题应记录真实 `typeHint`，不得作为普通选择题强制要求 A/B/C 选项。
+- 答案与解析区能匹配题号时应回填选择题 answer 或主观题参考答案；无法稳定匹配时应保留 warning。
