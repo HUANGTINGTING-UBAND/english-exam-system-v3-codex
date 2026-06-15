@@ -184,7 +184,8 @@ const detectTypeHintByQuestionNumber = (questionNo) => {
   if (numberValue >= 32 && numberValue <= 35) return { type: 'CLOZE', typeHint: 'seven_choice' }
   if (numberValue >= 36 && numberValue <= 45) return { type: 'CLOZE', typeHint: 'cloze' }
   if (numberValue >= 46 && numberValue <= 55) return { type: 'CLOZE', typeHint: 'fill_blank' }
-  if (numberValue >= 56 && numberValue <= 60) return { type: 'TRANSLATION', typeHint: 'translation' }
+  if (numberValue >= 56 && numberValue <= 59) return { type: 'TRANSLATION', typeHint: 'subjective' }
+  if (numberValue === 60) return { type: 'TRANSLATION', typeHint: 'translation' }
   if (numberValue === 61) return { type: 'WRITING', typeHint: 'writing' }
 
   return null
@@ -204,6 +205,7 @@ const getMaterialStartIndex = (text, typeHint) => {
     seven_choice: [/Make a Difference to Your School/i],
     cloze: [/Oh,\s*no\?\s*How silly I was/i],
     fill_blank: [/Long,\s*long ago/i],
+    subjective: [/My name is Jeff/i],
   }
 
   const starts = startsByType[typeHint] || []
@@ -245,6 +247,30 @@ const cleanMaterialText = (text, typeHint = '') => {
 const looksLikeMaterialText = (text, typeHint = '') => {
   const value = cleanMaterialText(text, typeHint)
   return value.length >= 40 && /[a-zA-Z]/.test(value)
+}
+
+const getMaterialTitleByTypeHint = (typeHint, index) => {
+  const titleMap = {
+    reading: '阅读材料',
+    seven_choice: '七选五材料',
+    cloze: '完形填空材料',
+    fill_blank: '语法填空材料',
+    subjective: '综合技能材料',
+  }
+
+  return `${titleMap[typeHint] || '材料'} ${index}`
+}
+
+const getMaterialTypeByTypeHint = (typeHint) => {
+  return typeHint === 'cloze' ? 'CLOZE_TEXT' : 'TEXT'
+}
+
+const extractSevenChoiceCandidates = (text) => {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^[A-E][\.．、\)]\s+/.test(line))
+    .join('\n')
 }
 
 const parseAnswerDetails = (rawText) => {
@@ -321,11 +347,12 @@ const splitQuestionBlocks = (rawText) => {
     const block = normalizedText.slice(marker.index, nextMarker ? nextMarker.index : normalizedText.length).trim()
     const prefixStart = previousMarker ? previousMarker.index : Math.max(0, marker.index - 1200)
     const prefix = normalizedText.slice(prefixStart, marker.index).trim()
-    const materialText = ['reading', 'seven_choice', 'cloze', 'fill_blank'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix, marker.detected.typeHint) ? cleanMaterialText(prefix, marker.detected.typeHint) : ''
+    const materialText = ['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix, marker.detected.typeHint) ? cleanMaterialText(prefix, marker.detected.typeHint) : ''
 
     return {
       block,
       materialText,
+      prefix,
       typeHint: marker.detected.typeHint,
       detectedType: marker.detected.type,
     }
@@ -443,6 +470,7 @@ const parseImportText = (rawText, fallbackTitle) => {
     const block = typeof questionEntry === 'string' ? questionEntry : questionEntry.block
     const inferredType = typeof questionEntry === 'string' ? { type: 'CHOICE', typeHint: 'choice' } : { type: questionEntry.detectedType || 'CHOICE', typeHint: questionEntry.typeHint || 'choice' }
     const materialText = typeof questionEntry === 'string' ? '' : questionEntry.materialText
+    const prefixText = typeof questionEntry === 'string' ? '' : questionEntry.prefix || ''
     const questionNo = getQuestionNumberFromBlock(block, index)
     if (isExampleQuestionBlock(block)) {
       return
@@ -455,17 +483,29 @@ const parseImportText = (rawText, fallbackTitle) => {
 
     seenQuestionNumbers.add(questionNo)
 
+    if (inferredType.typeHint === 'cloze' && currentMaterialLocalId?.startsWith('seven_choice-')) {
+      const sevenChoiceCandidates = extractSevenChoiceCandidates(prefixText)
+      const sevenChoiceMaterial = materialIdMap.get(currentMaterialLocalId)
+      if (sevenChoiceCandidates && sevenChoiceMaterial && !sevenChoiceMaterial.content.includes(sevenChoiceCandidates)) {
+        sevenChoiceMaterial.content = `${sevenChoiceMaterial.content}\n${sevenChoiceCandidates}`.trim()
+      }
+    }
+
     if (materialText) {
-      currentMaterialLocalId = `${inferredType.typeHint || 'material'}-${materials.length + 1}`
-      materials.push({
-        localId: currentMaterialLocalId,
-        type: inferredType.typeHint === 'cloze' ? 'CLOZE_TEXT' : 'TEXT',
-        title: inferredType.typeHint === 'cloze' ? `完形填空材料 ${materials.length + 1}` : `阅读材料 ${materials.length + 1}`,
-        content: materialText,
-        orderIndex: materials.length + 1,
-      })
-      materialIdMap.set(currentMaterialLocalId, materials[materials.length - 1])
-      warnings.push({ level: 'WARNING', code: 'MATERIAL_GROUP_UNCERTAIN', message: `第 ${questionNo} 题前识别到材料文本，已按 ${currentMaterialLocalId} 关联，请人工确认材料边界。`, targetType: 'MATERIAL' })
+      const shouldReuseGroupedMaterial = ['seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint) && currentMaterialLocalId?.startsWith(`${inferredType.typeHint}-`)
+
+      if (!shouldReuseGroupedMaterial) {
+        currentMaterialLocalId = `${inferredType.typeHint || 'material'}-${materials.length + 1}`
+        materials.push({
+          localId: currentMaterialLocalId,
+          type: getMaterialTypeByTypeHint(inferredType.typeHint),
+          title: getMaterialTitleByTypeHint(inferredType.typeHint, materials.length + 1),
+          content: materialText,
+          orderIndex: materials.length + 1,
+        })
+        materialIdMap.set(currentMaterialLocalId, materials[materials.length - 1])
+        warnings.push({ level: 'WARNING', code: 'MATERIAL_GROUP_UNCERTAIN', message: `第 ${questionNo} 题前识别到材料文本，已按 ${currentMaterialLocalId} 关联，请人工确认材料边界。`, targetType: 'MATERIAL' })
+      }
     }
 
     const hasExplicitType = Boolean(block.match(/题型[:：]\s*(.+)/)?.[1])
@@ -486,7 +526,7 @@ const parseImportText = (rawText, fallbackTitle) => {
     const mappedAnswer = answerMap.get(questionNo)
     const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : (answerRaw || answerDetail)
     const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || 2
-    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
+    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective', 'translation'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
 
     const choiceLike = isChoiceLikeQuestion(text, options)
 
@@ -497,7 +537,7 @@ const parseImportText = (rawText, fallbackTitle) => {
     if (materialLocalId && !materialIdMap.has(materialLocalId)) warnings.push({ level: 'WARNING', code: 'MATERIAL_BINDING_UNCERTAIN', message: `第 ${questionNo} 题引用的材料 ${materialLocalId} 未找到，入库前请确认。`, targetType: 'QUESTION' })
 
     questions.push({
-      type, text: text || '待校对题目', options: options.length ? options : null, answer, score,
+      type, text: text || (['seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : `第${questionNo}题`), options: options.length ? options : null, answer, score,
       knowledgePoint: block.match(/知识点[:：]\s*(.+)/)?.[1]?.trim() || '未分类',
       referenceAnswer: type === 'CHOICE' ? '' : (answerRaw || answerDetail),
       explanation: block.match(/解析[:：]\s*(.+)/)?.[1]?.trim() || (type === 'CHOICE' ? answerDetail.replace(/^[A-D]\b[.．、)]?\s*/, '') : ''),
@@ -505,6 +545,41 @@ const parseImportText = (rawText, fallbackTitle) => {
       metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint },
     })
   })
+
+  const formalQuestionText = rawText.includes('[QUESTION]') ? rawText : extractFormalQuestionText(rawText)
+  for (let questionNumber = 1; questionNumber <= 61; questionNumber += 1) {
+    const questionNo = String(questionNumber)
+    const hasFormalMarker = new RegExp(`(^|\\n|\\s)(?:第\\s*)?${questionNo}\\s*(?:题)?(?:[\\.．、\\)]\\s*|\\s+)`).test(formalQuestionText)
+
+    if (!hasFormalMarker || seenQuestionNumbers.has(questionNo)) {
+      continue
+    }
+
+    const inferredType = detectTypeHintByQuestionNumber(questionNo) || { type: 'CHOICE', typeHint: 'choice' }
+    const materialLocalId = ['seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint)
+      ? materials.find((material) => material.localId.startsWith(`${inferredType.typeHint}-`))?.localId || null
+      : (inferredType.typeHint === 'translation' ? materials.find((material) => material.localId.startsWith('subjective-'))?.localId || null : null)
+    const mappedAnswer = answerMap.get(questionNo)
+    const answerDetail = answerDetailMap.get(questionNo) || ''
+    const answer = inferredType.type === 'CHOICE' ? (mappedAnswer ?? null) : answerDetail
+
+    questions.push({
+      type: inferredType.type,
+      text: ['seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : `第${questionNo}题`,
+      options: null,
+      answer,
+      score: 2,
+      knowledgePoint: '未分类',
+      referenceAnswer: inferredType.type === 'CHOICE' ? '' : answerDetail,
+      explanation: '',
+      orderIndex: questionNumber,
+      metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint, synthesized: true },
+    })
+    seenQuestionNumbers.add(questionNo)
+    warnings.push({ level: 'WARNING', code: 'QUESTION_SYNTHESIZED_FROM_NUMBER', message: `第 ${questionNo} 题只识别到题号，已生成安全草稿题，请人工补全题干/答案。`, targetType: 'QUESTION' })
+  }
+
+  questions.sort((a, b) => Number(a.metadata?.questionNo || a.orderIndex) - Number(b.metadata?.questionNo || b.orderIndex))
 
   if (questions.length === 0) {
     warnings.push({

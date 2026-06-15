@@ -261,3 +261,15 @@ node scripts/smoke-import-parser.js
 - C 篇阅读材料必须包含 `What are insects`，且不能包含 `27．What is the writer’s main purpose...`。
 - 完形材料必须包含 `Oh, no? How silly I was`，且不能包含七选五标题或 A-E 候选项。
 - 语法填空材料必须包含 `Long, long ago`，类型不能保存为 `CLOZE_TEXT`，关联题目应记录 `metadata.typeHint: fill_blank`。
+
+## 13. 整卷题目完整性 smoke 用例
+
+`backend/scripts/smoke-import-parser.js` 还包含一个合成整卷片段，用于防止真实湖南中考 PDF 再次漏题或拆散题组：
+
+- 断言 `questions.length >= 60`，当前合成样例应达到 61 题。
+- 必须包含关键题号：1、20、21、31、32、35、36、45、46、55、56、60、61。
+- 七选五 32—35 必须绑定同一个 `seven_choice-*` material，且材料包含 A-E 候选项。
+- 完形 36—45 必须绑定同一个 `cloze-*` material。
+- 语法填空 46—55 必须绑定同一个 `fill_blank-*` material。
+- 综合技能 56—60 必须绑定 `My name is Jeff...` 对应的 `subjective-*` material。
+- 写作 61 必须保留，`metadata.typeHint` 为 `writing`，不得识别为普通选择题。
