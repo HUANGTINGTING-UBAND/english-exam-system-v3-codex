@@ -202,7 +202,6 @@ const generatedListening = Array.from({ length: 20 }, (_, index) => {
 A. Music. B. History. C. English.`
 }).join('\n')
 const generatedReadingA = `A
-This is article A for students.
 ${[21, 22, 23].map((n) => `${n}．What is reading question ${n}?
 A. One. B. Two. C. Three. D. Four.`).join('\n')}`
 const generatedReadingB = `B
@@ -217,8 +216,11 @@ const generatedSevenChoice = `七选五
 Make a Difference to Your School
 Your school can become better if everyone gives a hand.
 32．
+Students can help by caring about the school garden.
 33．
+They can also share ideas with teachers and classmates.
 34．
+Small actions can make the school cleaner and warmer.
 35．
 A. Start with small things.
 B. Keep the classroom clean.
@@ -226,13 +228,16 @@ C. Work with your classmates.
 D. Share your ideas.
 E. Make your school better.`
 const generatedCloze = `完形填空
-Oh, no? How silly I was to practice basketball inside! I picked up the ball and said sorry to my mother.
+Oh, no? How silly I was to practice basketball inside! That gave me a (n)
 ${Array.from({ length: 10 }, (_, index) => {
   const n = 36 + index
-  return `${n}．
-A. first B. second C. third`
+  const options = n === 40 ? 'A. sleeping B. crying C. running' : 'A. first B. second C. third'
+  const context = n === 45 ? 'He jumped up and gave me a big lick to show he was happy.' : `The story continued around blank ${n}.`
+  return `${n}．${context}
+${options}`
 }).join('\n')}`
 const generatedFillBlank = `语法填空
+45 city was on the rich Liyang Plain and should not start the fill blank material.
 Long, long ago, there was a city called Jijiaocheng. People there liked stories and songs.
 ${Array.from({ length: 10 }, (_, index) => `${46 + index}．${index === 0 ? 'The' : `word${index}`}`).join('\n')}`
 const generatedSubjective = `综合技能
@@ -289,6 +294,30 @@ if (fullQuestionOne?.metadata?.typeHint !== 'listening' || fullQuestionOne.type 
   throw new Error('Expected question 1 to remain listening CHOICE with A/B/C options')
 }
 
+const orderedQuestionNumbers = fullPaperParsed.questions.map((question) => Number(question.metadata?.questionNo))
+for (let index = 1; index < orderedQuestionNumbers.length; index += 1) {
+  if (orderedQuestionNumbers[index] < orderedQuestionNumbers[index - 1]) {
+    throw new Error('Expected questions to be sorted by question number')
+  }
+}
+
+for (const n of Array.from({ length: 20 }, (_, index) => String(index + 1))) {
+  const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n)
+  if (question?.metadata?.typeHint !== 'listening' || question.type !== 'CHOICE' || question.options?.length !== 3 || question.metadata?.materialLocalId) {
+    throw new Error(`Expected listening question ${n} to be an unbound CHOICE with A/B/C options`)
+  }
+}
+
+const readingAQuestions = ['21', '22', '23'].map((n) => fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n))
+const readingAMaterialId = readingAQuestions[0]?.metadata?.materialLocalId
+const readingAMaterial = fullPaperParsed.materials.find((material) => material.localId === readingAMaterialId)
+if (!readingAMaterial || !readingAMaterial.title.includes('图片/图表题') || !readingAMaterial.content.includes('PDF 文本未提取到 A 篇图片/图表内容')) {
+  throw new Error('Expected 21-23 to bind to reading A image/table placeholder material')
+}
+if (!readingAQuestions.every((question) => question?.metadata?.materialLocalId === readingAMaterialId)) {
+  throw new Error('Expected questions 21-23 to share the reading A placeholder material')
+}
+
 if (!fullMaterialsByContent.tan || fullMaterialsByContent.tan.content.includes('23．')) {
   throw new Error('Expected B reading material to contain The Tan family without question 23')
 }
@@ -297,8 +326,8 @@ if (!fullMaterialsByContent.insects || fullMaterialsByContent.insects.content.in
   throw new Error('Expected C reading material to contain What are insects without question 27')
 }
 
-if (!fullMaterialsByContent.seven || !fullMaterialsByContent.seven.content.includes('A. Start with small things') || !fullMaterialsByContent.seven.content.includes('E. Make your school better')) {
-  throw new Error('Expected seven_choice material to include title and A-E candidates')
+if (!fullMaterialsByContent.seven || !fullMaterialsByContent.seven.content.includes('Students can help by caring about the school garden') || !fullMaterialsByContent.seven.content.includes('A. Start with small things') || !fullMaterialsByContent.seven.content.includes('E. Make your school better')) {
+  throw new Error('Expected seven_choice material to include title, 32-35 context, and A-E candidates')
 }
 
 for (const n of ['32', '33', '34', '35']) {
@@ -308,8 +337,13 @@ for (const n of ['32', '33', '34', '35']) {
   }
 }
 
-if (!fullMaterialsByContent.cloze || fullMaterialsByContent.cloze.content.includes('Make a Difference')) {
-  throw new Error('Expected cloze material to contain cloze text without seven_choice content')
+if (!fullMaterialsByContent.cloze || fullMaterialsByContent.cloze.content.includes('Make a Difference') || !fullMaterialsByContent.cloze.content.includes('He jumped up and gave me a big lick')) {
+  throw new Error('Expected cloze material to contain complete cloze text without seven_choice content')
+}
+
+const question40 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '40')
+if (!question40?.options?.some((option) => option.includes('sleeping')) || !question40.options.some((option) => option.includes('crying')) || !question40.options.some((option) => option.includes('running'))) {
+  throw new Error('Expected question 40 options to include sleeping / crying / running')
 }
 
 for (const n of Array.from({ length: 10 }, (_, index) => String(36 + index))) {
@@ -319,8 +353,8 @@ for (const n of Array.from({ length: 10 }, (_, index) => String(36 + index))) {
   }
 }
 
-if (!fullMaterialsByContent.fill || fullMaterialsByContent.fill.type === 'CLOZE_TEXT') {
-  throw new Error('Expected fill_blank material to contain Long, long ago and not be CLOZE_TEXT')
+if (!fullMaterialsByContent.fill || fullMaterialsByContent.fill.type === 'CLOZE_TEXT' || !fullMaterialsByContent.fill.content.startsWith('Long, long ago') || fullMaterialsByContent.fill.content.startsWith('45 city')) {
+  throw new Error('Expected fill_blank material to start with Long, long ago and not be CLOZE_TEXT')
 }
 
 for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
@@ -345,4 +379,9 @@ for (const n of ['56', '57', '58', '59', '60']) {
 const writingQuestion = fullPaperParsed.questions.find((question) => question.metadata?.questionNo === '61')
 if (writingQuestion?.metadata?.typeHint !== 'writing' || writingQuestion.type === 'CHOICE') {
   throw new Error('Expected question 61 to be preserved as writing')
+}
+
+const duplicateWarnings = fullPaperParsed.warnings.filter((warning) => warning.code === 'DUPLICATE_QUESTION_NUMBER')
+if (duplicateWarnings.length > 0) {
+  throw new Error('Expected answer section not to create duplicate question warnings')
 }

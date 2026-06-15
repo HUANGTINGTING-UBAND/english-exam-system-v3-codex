@@ -234,10 +234,10 @@ const cleanMaterialText = (text, typeHint = '') => {
   return candidateText
     .split('\n')
     .map((line) => line.trim())
+    .map((line) => (questionLineRegex.test(line) ? line.replace(questionLineRegex, '').trim() : line))
     .filter(Boolean)
     .filter((line) => !instructionLineRegex.test(line))
     .filter((line) => !exampleRegex.test(line))
-    .filter((line) => !questionLineRegex.test(line))
     .filter((line) => keepOptionLines || !optionLineRegex.test(line))
     .filter((line) => !/^[A-C]$/.test(line))
     .join('\n')
@@ -271,6 +271,47 @@ const extractSevenChoiceCandidates = (text) => {
     .map((line) => line.trim())
     .filter((line) => /^[A-E][\.．、\)]\s+/.test(line))
     .join('\n')
+}
+
+const extractSevenChoiceTail = (text) => {
+  const beforeNextSection = String(text || '').split(/完形填空|Oh,\s*no\?/i)[0]
+  return beforeNextSection
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !questionLineRegex.test(line))
+    .filter((line) => !instructionLineRegex.test(line))
+    .join('\n')
+    .trim()
+}
+
+const appendMaterialContent = (material, extraContent) => {
+  const value = String(extraContent || '').trim()
+  if (!material || !value || material.content.includes(value)) return
+  material.content = `${material.content}\n${value}`.trim()
+}
+
+const extractFullGroupMaterial = (rawText, typeHint) => {
+  const formalText = extractFormalQuestionText(rawText)
+  const startPatterns = {
+    seven_choice: /Make a Difference to Your School/i,
+    cloze: /Oh,\s*no\?\s*How silly I was/i,
+    fill_blank: /Long,\s*long ago/i,
+    subjective: /My name is Jeff/i,
+  }
+  const endPatterns = {
+    seven_choice: /完形填空|Oh,\s*no\?/i,
+    cloze: /语法填空|Long,\s*long ago/i,
+    fill_blank: /综合技能|My name is Jeff/i,
+    subjective: /(?:^|\n)\s*61\s*[\.．、\)]|写作/i,
+  }
+  const startMatch = startPatterns[typeHint]?.exec(formalText)
+  if (!startMatch) return ''
+  const tail = formalText.slice(startMatch.index)
+  const endMatch = endPatterns[typeHint]?.exec(tail.slice(startMatch[0].length))
+  const sectionText = endMatch ? tail.slice(0, startMatch[0].length + endMatch.index) : tail
+
+  return cleanMaterialText(sectionText, typeHint)
 }
 
 const parseAnswerDetails = (rawText) => {
@@ -464,6 +505,10 @@ const parseImportText = (rawText, fallbackTitle) => {
   const seenQuestionNumbers = new Set()
   const questions = []
 
+  if (findAnswerSectionIndex(rawText) >= 0) {
+    warnings.push({ level: 'INFO', code: 'ANSWER_SECTION_SKIPPED_FOR_QUESTION_CREATION', message: '已识别答案区；答案区仅用于回填答案，不参与题目生成。', targetType: 'IMPORT_JOB' })
+  }
+
   let currentMaterialLocalId = null
 
   questionBlocks.forEach((questionEntry, index) => {
@@ -477,35 +522,49 @@ const parseImportText = (rawText, fallbackTitle) => {
     }
 
     if (seenQuestionNumbers.has(questionNo)) {
-      warnings.push({ level: 'WARNING', code: 'DUPLICATE_QUESTION_NUMBER', message: `第 ${questionNo} 题重复出现，已跳过重复草稿题。`, targetType: 'QUESTION' })
       return
     }
 
     seenQuestionNumbers.add(questionNo)
 
     if (inferredType.typeHint === 'cloze' && currentMaterialLocalId?.startsWith('seven_choice-')) {
-      const sevenChoiceCandidates = extractSevenChoiceCandidates(prefixText)
+      const sevenChoiceCandidates = extractSevenChoiceTail(prefixText) || extractSevenChoiceCandidates(prefixText)
       const sevenChoiceMaterial = materialIdMap.get(currentMaterialLocalId)
-      if (sevenChoiceCandidates && sevenChoiceMaterial && !sevenChoiceMaterial.content.includes(sevenChoiceCandidates)) {
-        sevenChoiceMaterial.content = `${sevenChoiceMaterial.content}\n${sevenChoiceCandidates}`.trim()
-      }
+      appendMaterialContent(sevenChoiceMaterial, sevenChoiceCandidates)
     }
 
     if (materialText) {
       const shouldReuseGroupedMaterial = ['seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint) && currentMaterialLocalId?.startsWith(`${inferredType.typeHint}-`)
+      const groupedMaterialText = extractFullGroupMaterial(rawText, inferredType.typeHint) || materialText
 
-      if (!shouldReuseGroupedMaterial) {
+      if (shouldReuseGroupedMaterial) {
+        appendMaterialContent(materialIdMap.get(currentMaterialLocalId), groupedMaterialText)
+      } else {
         currentMaterialLocalId = `${inferredType.typeHint || 'material'}-${materials.length + 1}`
         materials.push({
           localId: currentMaterialLocalId,
           type: getMaterialTypeByTypeHint(inferredType.typeHint),
           title: getMaterialTitleByTypeHint(inferredType.typeHint, materials.length + 1),
-          content: materialText,
+          content: groupedMaterialText,
           orderIndex: materials.length + 1,
         })
         materialIdMap.set(currentMaterialLocalId, materials[materials.length - 1])
         warnings.push({ level: 'WARNING', code: 'MATERIAL_GROUP_UNCERTAIN', message: `第 ${questionNo} 题前识别到材料文本，已按 ${currentMaterialLocalId} 关联，请人工确认材料边界。`, targetType: 'MATERIAL' })
       }
+    }
+
+    if (inferredType.typeHint === 'reading' && Number(questionNo) >= 21 && Number(questionNo) <= 23 && !currentMaterialLocalId?.startsWith('reading-') && !currentMaterialLocalId?.startsWith('reading_image-')) {
+      currentMaterialLocalId = `reading_image-${materials.length + 1}`
+      const placeholderMaterial = {
+        localId: currentMaterialLocalId,
+        type: 'TEXT',
+        title: '阅读材料 A（图片/图表题，需人工补图）',
+        content: 'PDF 文本未提取到 A 篇图片/图表内容，请人工查看原 PDF 并补充材料。',
+        orderIndex: materials.length + 1,
+      }
+      materials.push(placeholderMaterial)
+      materialIdMap.set(currentMaterialLocalId, placeholderMaterial)
+      warnings.push({ level: 'WARNING', code: 'MATERIAL_IMAGE_NOT_EXTRACTED', message: '阅读 A 篇疑似图片/图表材料，PDF 文本未提取完整，请人工补充材料内容。', targetType: 'MATERIAL' })
     }
 
     const hasExplicitType = Boolean(block.match(/题型[:：]\s*(.+)/)?.[1])
@@ -525,7 +584,7 @@ const parseImportText = (rawText, fallbackTitle) => {
     const answerDetail = answerDetailMap.get(questionNo) || ''
     const mappedAnswer = answerMap.get(questionNo)
     const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : (answerRaw || answerDetail)
-    const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || 2
+    const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || (inferredType.typeHint === 'listening' ? 1 : 2)
     const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective', 'translation'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
 
     const choiceLike = isChoiceLikeQuestion(text, options)

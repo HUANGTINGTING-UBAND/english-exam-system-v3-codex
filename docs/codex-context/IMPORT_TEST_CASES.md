@@ -273,3 +273,14 @@ node scripts/smoke-import-parser.js
 - 语法填空 46—55 必须绑定同一个 `fill_blank-*` material。
 - 综合技能 56—60 必须绑定 `My name is Jeff...` 对应的 `subjective-*` material。
 - 写作 61 必须保留，`metadata.typeHint` 为 `writing`，不得识别为普通选择题。
+
+## 14. 图片材料占位与整卷顺序回归
+
+后续 PDF 导入 smoke 必须继续验证：
+
+- 草稿题目按 `metadata.questionNo` 升序展示，不能出现完形/填空题跑到第 1 题前面。
+- 听力 1—20 不绑定阅读材料，保持 `typeHint: listening` 和 A/B/C 选项。
+- 阅读 A 若图片/图表文本未被 PDF 抽取，必须创建 `阅读材料 A（图片/图表题，需人工补图）` 占位材料并关联 21—23，同时产生 `MATERIAL_IMAGE_NOT_EXTRACTED` warning。
+- 七选五材料必须包含 32—35 上下文段落和 A-E 候选项，完形材料不得包含七选五内容。
+- 完形材料必须尽量合并后续短文片段，第 40 题应保留 sleeping / crying / running 等 A/B/C 选项。
+- 答案区仅回填答案，不能产生逐题 `DUPLICATE_QUESTION_NUMBER` warning；如需提示，应使用汇总型 `ANSWER_SECTION_SKIPPED_FOR_QUESTION_CREATION`。
