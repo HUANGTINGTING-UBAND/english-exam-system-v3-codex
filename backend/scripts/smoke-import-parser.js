@@ -233,7 +233,7 @@ const generatedCloze = `第三部分 语言运用
 Oh, no? How silly I was to practice basketball inside! That gave me a (n)
 ${Array.from({ length: 10 }, (_, index) => {
   const n = 36 + index
-  const options = n === 40 ? 'A. sleeping B. crying C. running' : 'A. first B. second C. third'
+  const options = n === 36 ? 'A. cup B. bowl C. spoon' : (n === 40 ? 'A. sleeping B. crying C. running' : 'A. first B. second C. third')
   const context = n === 45 ? 'He jumped up and gave me a big lick to show he was happy.' : `The story continued around blank ${n}.`
   return `${n}．${context}
 ${options}`
@@ -353,10 +353,23 @@ for (const n of ['32', '33', '34', '35']) {
   }
 }
 
+const question33 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '33')
+if (question33?.metadata?.typeHint !== 'seven_choice' || question33.type === 'CLOZE' || question33.text.length > 20) {
+  throw new Error('Expected question 33 to be a short seven_choice blank, not CLOZE or a long paragraph')
+}
+const question35 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '35')
+if (JSON.stringify(question35?.options || []).includes('Oh, no?') || String(question35?.answer || '').includes('第三部分')) {
+  throw new Error('Expected question 35 options/answer not to contain cloze start or section heading')
+}
+
 if (!fullMaterialsByContent.cloze || fullMaterialsByContent.cloze.content.includes('Make a Difference') || fullMaterialsByContent.cloze.content.includes('阅读下面短文，在空白处填入') || !fullMaterialsByContent.cloze.content.includes('He jumped up and gave me a big lick')) {
   throw new Error('Expected cloze material to contain complete cloze text without seven_choice or fill_blank instructions')
 }
 
+const question36 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '36')
+if (!question36?.options?.some((option) => option.includes('cup')) || !question36.options.some((option) => option.includes('bowl')) || !question36.options.some((option) => option.includes('spoon'))) {
+  throw new Error('Expected question 36 options to include cup / bowl / spoon')
+}
 const question40 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '40')
 if (!question40?.options?.some((option) => option.includes('sleeping')) || !question40.options.some((option) => option.includes('crying')) || !question40.options.some((option) => option.includes('running'))) {
   throw new Error('Expected question 40 options to include sleeping / crying / running')
@@ -378,6 +391,10 @@ for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
   if (question?.metadata?.materialLocalId !== fullMaterialsByContent.fill.localId || question.metadata?.typeHint !== 'fill_blank') {
     throw new Error(`Expected fill_blank question ${n} to bind to one fill_blank material`)
   }
+}
+const question46 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '46')
+if (question46?.type === 'CLOZE' || question46?.text?.includes('(provide) water') || question46?.text?.includes('48 (cut)')) {
+  throw new Error('Expected question 46 to be fill_blank-compatible, not CLOZE, and not contain the whole passage')
 }
 
 if (!fullMaterialsByContent.subjective || fullMaterialsByContent.subjective.content.includes('When did Jeff begin') || fullMaterialsByContent.subjective.content.includes('Who suggested') || fullMaterialsByContent.subjective.content.includes('Translate the underlined')) {
@@ -411,6 +428,15 @@ if (writingQuestion?.metadata?.typeHint !== 'writing' || writingQuestion.type ==
   throw new Error('Expected question 61 to be preserved as writing')
 }
 
+const sectionHeadingPattern = /第一部分|第二部分|第三部分|第四部分|第一节|第二节|完形填空|语法填空|综合技能|英语参考答案/
+const materialStartPattern = /The Tan family|What are insects|Oh, no\?|Long, long ago/
+const explanationInstructionPattern = /阅读下列材料|阅读下面短文|掌握其大意|从每题所给|第一部分|第二部分|第三部分|第四部分/
+for (const question of fullPaperParsed.questions) {
+  if (sectionHeadingPattern.test(String(question.answer || ''))) throw new Error(`Expected question ${question.metadata?.questionNo} answer not to contain section heading`)
+  if (JSON.stringify(question.options || []).match(materialStartPattern)) throw new Error(`Expected question ${question.metadata?.questionNo} options not to contain material starts`)
+  if (question.explanation && explanationInstructionPattern.test(question.explanation)) throw new Error(`Expected question ${question.metadata?.questionNo} explanation not to contain section instructions`)
+  if (question.explanation && !/解析|答案解析|解题思路|原因/.test(question.explanation)) throw new Error(`Expected question ${question.metadata?.questionNo} explanation to be empty unless explicit analysis marker exists`)
+}
 const duplicateWarnings = fullPaperParsed.warnings.filter((warning) => warning.code === 'DUPLICATE_QUESTION_NUMBER')
 if (duplicateWarnings.length > 0) {
   throw new Error('Expected answer section not to create duplicate question warnings')

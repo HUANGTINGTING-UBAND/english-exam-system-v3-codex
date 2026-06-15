@@ -284,3 +284,15 @@ node scripts/smoke-import-parser.js
 - 七选五材料必须包含 32—35 上下文段落和 A-E 候选项，完形材料不得包含七选五内容。
 - 完形材料必须尽量合并后续短文片段，第 40 题应保留 sleeping / crying / running 等 A/B/C 选项。
 - 答案区仅回填答案，不能产生逐题 `DUPLICATE_QUESTION_NUMBER` warning；如需提示，应使用汇总型 `ANSWER_SECTION_SKIPPED_FOR_QUESTION_CREATION`。
+
+## 15. 字段污染与题型识别回归
+
+湖南中考 PDF 解析 smoke 还必须防止字段污染：
+
+- 21—23 必须共用阅读 A 图片/图表占位材料；第 23 题选项不得包含 `The Tan family`。
+- 七选五 32—35 的 `metadata.typeHint` 必须是 `seven_choice`，题型不能保存为 `CLOZE`，题干应为短空号文本。
+- 完形 36—45 必须保留 A/B/C 选项；第 36 题应能解析 `cup / bowl / spoon`。
+- 语法填空 46—55 的 `metadata.typeHint` 必须是 `fill_blank`，题型不能保存为 `CLOZE`，题干不能塞入整篇材料。
+- 综合技能材料不能包含 56—60 的题干；这些题干必须作为独立草稿题。
+- 没有明确 `解析：/答案解析：/解题思路：/原因：` 标记时，`explanation` 应为空，section 说明不得进入 explanation。
+- `answer` 和 `options` 不得包含 section heading 或下一篇材料开头。

@@ -181,9 +181,9 @@ const detectTypeHintByQuestionNumber = (questionNo) => {
 
   if (numberValue >= 1 && numberValue <= 20) return { type: 'CHOICE', typeHint: 'listening' }
   if (numberValue >= 21 && numberValue <= 31) return { type: 'CHOICE', typeHint: 'reading' }
-  if (numberValue >= 32 && numberValue <= 35) return { type: 'CLOZE', typeHint: 'seven_choice' }
+  if (numberValue >= 32 && numberValue <= 35) return { type: 'CHOICE', typeHint: 'seven_choice' }
   if (numberValue >= 36 && numberValue <= 45) return { type: 'CLOZE', typeHint: 'cloze' }
-  if (numberValue >= 46 && numberValue <= 55) return { type: 'CLOZE', typeHint: 'fill_blank' }
+  if (numberValue >= 46 && numberValue <= 55) return { type: 'TRANSLATION', typeHint: 'fill_blank' }
   if (numberValue >= 56 && numberValue <= 59) return { type: 'TRANSLATION', typeHint: 'subjective' }
   if (numberValue === 60) return { type: 'TRANSLATION', typeHint: 'translation' }
   if (numberValue === 61) return { type: 'WRITING', typeHint: 'writing' }
@@ -316,6 +316,25 @@ const extractFullGroupMaterial = (rawText, typeHint) => {
   const sectionText = endMatch ? tail.slice(0, startMatch[0].length + endMatch.index) : tail
 
   return cleanMaterialText(sectionText, typeHint)
+}
+
+const fieldBoundaryRegex = /(?:The Tan family|What are insects|Make a Difference to Your School|Oh,\s*no\?|Long,\s*long ago|My name is Jeff|英语参考答案|第一部分|第二部分|第三部分|第四部分|第一节|第二节|完形填空|语法填空|综合技能|阅读下面的短文|阅读下面短文)/i
+
+const sanitizeImportedField = (value) => {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  const boundaryMatch = fieldBoundaryRegex.exec(text)
+  const cleanText = boundaryMatch ? text.slice(0, boundaryMatch.index).trim() : text
+  return cleanText.replace(/\s+/g, ' ').trim()
+}
+
+const sanitizeQuestionOptions = (options, typeHint) => {
+  const maxOptions = ['listening', 'cloze'].includes(typeHint) ? 3 : 4
+  return (options || [])
+    .slice(0, maxOptions)
+    .map(sanitizeImportedField)
+    .filter(Boolean)
+    .filter((option) => option.length <= 160)
 }
 
 const parseAnswerDetails = (rawText) => {
@@ -574,7 +593,8 @@ const parseImportText = (rawText, fallbackTitle) => {
 
     const hasExplicitType = Boolean(block.match(/题型[:：]\s*(.+)/)?.[1])
     const type = hasExplicitType ? normalizeDraftQuestionType(block.match(/题型[:：]\s*(.+)/)?.[1], warnings, `第 ${questionNo} 题`) : inferredType.type
-    const text = parseQuestionText(block)
+    const parsedText = sanitizeImportedField(parseQuestionText(block))
+    const text = ['seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : parsedText
 
     if (!text) {
       warnings.push({ level: 'WARNING', code: 'MISSING_QUESTION_TEXT', message: `第 ${questionNo} 题题干未明确解析，请人工补充。`, targetType: 'QUESTION' })
@@ -584,11 +604,11 @@ const parseImportText = (rawText, fallbackTitle) => {
       .map((letter) => block.match(new RegExp(`(?:^|\\n|\\s)${letter}(?:[\\.．、\\)]\\s*|\\s+)([^A-D\\n]+)`, 'm'))?.[1]?.trim())
       .filter(Boolean)
     const inlineOptions = parseInlineOptions(block)
-    const options = inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions
+    const options = sanitizeQuestionOptions(inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions, inferredType.typeHint)
     const answerRaw = block.match(/(?:答案|参考答案)[:：]\s*(.+)/)?.[1]?.trim() || ''
-    const answerDetail = answerDetailMap.get(questionNo) || ''
+    const answerDetail = sanitizeImportedField(answerDetailMap.get(questionNo) || '')
     const mappedAnswer = answerMap.get(questionNo)
-    const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : (answerRaw || answerDetail)
+    const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : (sanitizeImportedField(answerRaw) || answerDetail)
     const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || (inferredType.typeHint === 'listening' ? 1 : 2)
     const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective', 'translation'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
 
@@ -603,8 +623,8 @@ const parseImportText = (rawText, fallbackTitle) => {
     questions.push({
       type, text: text || (['seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : `第${questionNo}题`), options: options.length ? options : null, answer, score,
       knowledgePoint: block.match(/知识点[:：]\s*(.+)/)?.[1]?.trim() || '未分类',
-      referenceAnswer: type === 'CHOICE' ? '' : (answerRaw || answerDetail),
-      explanation: block.match(/解析[:：]\s*(.+)/)?.[1]?.trim() || (type === 'CHOICE' ? answerDetail.replace(/^[A-D]\b[.．、)]?\s*/, '') : ''),
+      referenceAnswer: type === 'CHOICE' ? '' : (sanitizeImportedField(answerRaw) || answerDetail),
+      explanation: sanitizeImportedField(block.match(/(?:解析|答案解析|解题思路|原因)[:：]\s*(.+)/)?.[1] || ''),
       orderIndex: Number(questionNo) || index + 1,
       metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint },
     })
