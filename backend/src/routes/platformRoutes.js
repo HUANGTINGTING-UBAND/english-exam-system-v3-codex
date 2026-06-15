@@ -84,7 +84,7 @@ const stripQuestionNumberPrefix = (block) => {
 
 const optionMarkerPattern = '[A-D](?:[\\.．、\\)]\\s*|\\s+)'
 const firstOptionRegex = new RegExp(`(?:^|\\s)${optionMarkerPattern}`, 'm')
-const instructionLineRegex = /(?:注意事项|考试说明|答题说明|听力测试现在开始|听力材料|录音材料|请听|听下面|回答第|答题卡|涂改液|最佳选项|每段对话|每段材料|本试卷|本题共|小题|满分|时量|页|PAGE|共\s*\d+\s*页)/i
+const instructionLineRegex = /(?:注意事项|考试说明|答题说明|听力测试现在开始|听力材料|录音材料|请听|听下面|回答第|答题卡|涂改液|最佳选项|每段对话|每段材料|本试卷|本题共|小题|满分|时量|页|PAGE|共\s*\d+\s*页|阅读下面的短文，掌握其大意|阅读下面短文，在空白处填入|阅读下面短文，根据短文内容回答问题|第三部分\s*语言运用|第四部分\s*综合技能|第一节|第二节)/i
 const exampleRegex = /(?:例题|例如|例[:：]|答案是\s*[A-D]|答案为\s*[A-D])/i
 
 const normalizeImportRawText = (rawText) => {
@@ -234,7 +234,11 @@ const cleanMaterialText = (text, typeHint = '') => {
   return candidateText
     .split('\n')
     .map((line) => line.trim())
-    .map((line) => (questionLineRegex.test(line) ? line.replace(questionLineRegex, '').trim() : line))
+    .map((line) => {
+      if (!questionLineRegex.test(line)) return line
+      if (['reading', 'subjective'].includes(typeHint)) return ''
+      return line.replace(questionLineRegex, '').trim()
+    })
     .filter(Boolean)
     .filter((line) => !instructionLineRegex.test(line))
     .filter((line) => !exampleRegex.test(line))
@@ -300,9 +304,9 @@ const extractFullGroupMaterial = (rawText, typeHint) => {
     subjective: /My name is Jeff/i,
   }
   const endPatterns = {
-    seven_choice: /完形填空|Oh,\s*no\?/i,
-    cloze: /语法填空|Long,\s*long ago/i,
-    fill_blank: /综合技能|My name is Jeff/i,
+    seven_choice: /第三部分\s*语言运用|阅读下面的短文，掌握其大意|完形填空|Oh,\s*no\?/i,
+    cloze: /第二节|阅读下面短文，在空白处填入|语法填空|Long,\s*long ago/i,
+    fill_blank: /第四部分\s*综合技能|阅读下面短文，根据短文内容回答问题|综合技能|My name is Jeff/i,
     subjective: /(?:^|\n)\s*61\s*[\.．、\)]|写作/i,
   }
   const startMatch = startPatterns[typeHint]?.exec(formalText)
@@ -388,7 +392,8 @@ const splitQuestionBlocks = (rawText) => {
     const block = normalizedText.slice(marker.index, nextMarker ? nextMarker.index : normalizedText.length).trim()
     const prefixStart = previousMarker ? previousMarker.index : Math.max(0, marker.index - 1200)
     const prefix = normalizedText.slice(prefixStart, marker.index).trim()
-    const materialText = ['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix, marker.detected.typeHint) ? cleanMaterialText(prefix, marker.detected.typeHint) : ''
+    const canUseReadingPrefix = marker.detected.typeHint !== 'reading' || getMaterialStartIndex(prefix, 'reading') >= 0
+    const materialText = canUseReadingPrefix && ['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix, marker.detected.typeHint) ? cleanMaterialText(prefix, marker.detected.typeHint) : ''
 
     return {
       block,

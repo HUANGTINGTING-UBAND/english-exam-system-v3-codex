@@ -227,7 +227,9 @@ B. Keep the classroom clean.
 C. Work with your classmates.
 D. Share your ideas.
 E. Make your school better.`
-const generatedCloze = `完形填空
+const generatedCloze = `第三部分 语言运用
+第一节 完形填空
+阅读下面的短文，掌握其大意，然后从各题所给的 A、B、C 三个选项中选出一个最佳选项。
 Oh, no? How silly I was to practice basketball inside! That gave me a (n)
 ${Array.from({ length: 10 }, (_, index) => {
   const n = 36 + index
@@ -236,14 +238,20 @@ ${Array.from({ length: 10 }, (_, index) => {
   return `${n}．${context}
 ${options}`
 }).join('\n')}`
-const generatedFillBlank = `语法填空
+const generatedFillBlank = `第二节（共 10 小题）
+阅读下面短文，在空白处填入 1 个适当的单词或括号内单词的正确形式。
 45 city was on the rich Liyang Plain and should not start the fill blank material.
 Long, long ago, there was a city called Jijiaocheng. People there liked stories and songs.
 ${Array.from({ length: 10 }, (_, index) => `${46 + index}．${index === 0 ? 'The' : `word${index}`}`).join('\n')}`
-const generatedSubjective = `综合技能
+const generatedSubjective = `第四部分 综合技能
+第一节（共 5 小题）
+阅读下面短文，根据短文内容回答问题或翻译画线部分。
 My name is Jeff. I like learning foreign languages. I often practice English with my friends.
-${[56, 57, 58, 59].map((n) => `${n}．Answer question ${n}.`).join('\n')}
-60．Translate the underlined sentence into Chinese.`
+56．When did Jeff begin to learn Chinese?
+57．Who suggested a study tour in China?
+58．What do you think of Jeff?
+59．What new things will you try after reading Jeff’s story? Why?
+60．将短文中画线部分翻译成中文。`
 const generatedWriting = `61．在假期，我们应该更多地陪伴家人还是朋友呢？请写一篇英语短文表达你的观点。`
 const generatedAnswers = `英语参考答案
 1．B 2．A 3．C 4．A 5．C
@@ -326,8 +334,16 @@ if (!fullMaterialsByContent.insects || fullMaterialsByContent.insects.content.in
   throw new Error('Expected C reading material to contain What are insects without question 27')
 }
 
+const materialContents = fullPaperParsed.materials.map((material) => material.content)
+if (materialContents.some((content) => content.includes('What is reading question 24') || content.includes('What is reading question 25') || content.includes('What is reading question 28'))) {
+  throw new Error('Expected reading question stems not to become standalone materials')
+}
+
 if (!fullMaterialsByContent.seven || !fullMaterialsByContent.seven.content.includes('Students can help by caring about the school garden') || !fullMaterialsByContent.seven.content.includes('A. Start with small things') || !fullMaterialsByContent.seven.content.includes('E. Make your school better')) {
   throw new Error('Expected seven_choice material to include title, 32-35 context, and A-E candidates')
+}
+if (fullMaterialsByContent.seven.content.includes('阅读下面的短文，掌握其大意')) {
+  throw new Error('Expected seven_choice material not to include cloze instructions')
 }
 
 for (const n of ['32', '33', '34', '35']) {
@@ -337,8 +353,8 @@ for (const n of ['32', '33', '34', '35']) {
   }
 }
 
-if (!fullMaterialsByContent.cloze || fullMaterialsByContent.cloze.content.includes('Make a Difference') || !fullMaterialsByContent.cloze.content.includes('He jumped up and gave me a big lick')) {
-  throw new Error('Expected cloze material to contain complete cloze text without seven_choice content')
+if (!fullMaterialsByContent.cloze || fullMaterialsByContent.cloze.content.includes('Make a Difference') || fullMaterialsByContent.cloze.content.includes('阅读下面短文，在空白处填入') || !fullMaterialsByContent.cloze.content.includes('He jumped up and gave me a big lick')) {
+  throw new Error('Expected cloze material to contain complete cloze text without seven_choice or fill_blank instructions')
 }
 
 const question40 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '40')
@@ -353,8 +369,8 @@ for (const n of Array.from({ length: 10 }, (_, index) => String(36 + index))) {
   }
 }
 
-if (!fullMaterialsByContent.fill || fullMaterialsByContent.fill.type === 'CLOZE_TEXT' || !fullMaterialsByContent.fill.content.startsWith('Long, long ago') || fullMaterialsByContent.fill.content.startsWith('45 city')) {
-  throw new Error('Expected fill_blank material to start with Long, long ago and not be CLOZE_TEXT')
+if (!fullMaterialsByContent.fill || fullMaterialsByContent.fill.type === 'CLOZE_TEXT' || !fullMaterialsByContent.fill.content.startsWith('Long, long ago') || fullMaterialsByContent.fill.content.startsWith('45 city') || fullMaterialsByContent.fill.content.includes('第四部分 综合技能') || fullMaterialsByContent.fill.content.includes('阅读下面短文，根据短文内容回答问题')) {
+  throw new Error('Expected fill_blank material to start with Long, long ago and exclude comprehensive-skill instructions')
 }
 
 for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
@@ -364,8 +380,8 @@ for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
   }
 }
 
-if (!fullMaterialsByContent.subjective) {
-  throw new Error('Expected subjective material to contain My name is Jeff')
+if (!fullMaterialsByContent.subjective || fullMaterialsByContent.subjective.content.includes('When did Jeff begin') || fullMaterialsByContent.subjective.content.includes('Who suggested') || fullMaterialsByContent.subjective.content.includes('Translate the underlined')) {
+  throw new Error('Expected subjective material to contain only passage text, not questions 56-60')
 }
 
 for (const n of ['56', '57', '58', '59', '60']) {
@@ -373,6 +389,20 @@ for (const n of ['56', '57', '58', '59', '60']) {
   const expectedTypeHints = n === '60' ? ['translation', 'subjective'] : ['subjective']
   if (question?.metadata?.materialLocalId !== fullMaterialsByContent.subjective.localId || !expectedTypeHints.includes(question.metadata?.typeHint)) {
     throw new Error(`Expected subjective/translation question ${n} to bind to My name is Jeff material`)
+  }
+}
+
+const expectedSubjectiveTexts = {
+  56: 'When did Jeff begin to learn Chinese?',
+  57: 'Who suggested a study tour in China?',
+  58: 'What do you think of Jeff?',
+  59: 'What new things will you try after reading Jeff’s story? Why?',
+  60: '将短文中画线部分翻译成中文。',
+}
+for (const [questionNo, expectedText] of Object.entries(expectedSubjectiveTexts)) {
+  const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === questionNo)
+  if (!question?.text?.includes(expectedText)) {
+    throw new Error(`Expected question ${questionNo} text to include ${expectedText}`)
   }
 }
 

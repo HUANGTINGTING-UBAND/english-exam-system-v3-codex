@@ -26,10 +26,15 @@ const materialGroups = computed(() => {
     const localId = material.metadata?.localId
     return {
       material,
-      questions: (selectedJob.value.questions || []).filter((question) => question.materialLocalId === localId),
+      questions: (selectedJob.value.questions || [])
+        .filter((question) => question.materialLocalId === localId)
+        .sort(sortQuestionsByNumber),
     }
   }).filter((group) => group.questions.length > 0)
 })
+
+const getQuestionNumber = (question) => Number(question?.metadata?.questionNo || question?.orderIndex || 0)
+const sortQuestionsByNumber = (a, b) => getQuestionNumber(a) - getQuestionNumber(b)
 
 const loadJobs = async () => {
   jobs.value = await getImportJobs()
@@ -131,7 +136,7 @@ const prepareJobForEdit = (job) => {
       answerText: question.answer ?? '',
       materialLocalId: question.metadata?.materialLocalId || '',
       typeHint: question.metadata?.typeHint || 'choice',
-    })),
+    })).sort(sortQuestionsByNumber),
   }
 }
 
