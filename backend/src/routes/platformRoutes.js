@@ -840,6 +840,58 @@ const parseInlineOptions = (block) => {
   return options
 }
 
+
+const parseClozeOptionBlock = (rawText) => {
+  const { examText } = splitAnswerSection(cleanRawText(rawText))
+  const sections = splitByMajorSections(examText)
+  const source = sections.languageUse || examText
+  const startMatch = /(^|\n|\s)36\s*[\.．、\)]?\s*A[\.．、\)]\s*/.exec(source)
+
+  if (!startMatch) {
+    return new Map()
+  }
+
+  const optionTail = source.slice(startMatch.index + (startMatch[1]?.length || 0))
+  const endMatch = /(?:^|\n|\s)(?:第二节|阅读下面短文，在空白处填入|Long,\s*long\s*ago|46\s*[\.．、\)]|46\s+)/i.exec(optionTail.slice(1))
+  const optionBlock = endMatch ? optionTail.slice(0, endMatch.index + 1) : optionTail
+  const questionMarkers = []
+  const questionMarkerRegex = /(^|\n|\s)(3[6-9]|4[0-5])\s*[\.．、\)]?[\s\S]{0,140}?(?=A[\.．、\)]\s*)/g
+  let markerMatch = questionMarkerRegex.exec(optionBlock)
+
+  while (markerMatch) {
+    questionMarkers.push({
+      index: markerMatch.index + (markerMatch[1]?.length || 0),
+      questionNo: markerMatch[2],
+    })
+    markerMatch = questionMarkerRegex.exec(optionBlock)
+  }
+
+  const optionMap = new Map()
+
+  questionMarkers.forEach((marker, index) => {
+    const nextMarker = questionMarkers[index + 1]
+    const questionOptionText = optionBlock.slice(marker.index, nextMarker ? nextMarker.index : optionBlock.length)
+      .replace(/^\s*(?:3[6-9]|4[0-5])\s*[\.．、\)]?[\s\S]*?(?=A[\.．、\)]\s*)/, '')
+      .replace(/[\t ]+/g, ' ')
+      .trim()
+    const optionRegex = /(?:^|\s|\n)([ABC])\s*[\.．、\)]\s*([\s\S]*?)(?=(?:\s|\n)[ABC]\s*[\.．、\)]\s*|$)/g
+    const parsedOptions = []
+    let optionMatch = optionRegex.exec(questionOptionText)
+
+    while (optionMatch) {
+      parsedOptions.push(sanitizeImportedField(optionMatch[2]))
+      optionMatch = optionRegex.exec(questionOptionText)
+    }
+
+    const cleanOptions = parsedOptions.filter(Boolean).slice(0, 3)
+    if (cleanOptions.length === 3) {
+      optionMap.set(marker.questionNo, cleanOptions)
+    }
+  })
+
+  return optionMap
+}
+
 const parseQuestionText = (block) => {
   const labeledTextMatch = block.match(/题干[:：]\s*([\s\S]*?)(?=\n\s*(?:选项[:：]|A[\.．、\)]?|答案[:：]|解析[:：]|知识点[:：]|分值[:：]|材料ID[:：]|$))/)
 
@@ -881,6 +933,7 @@ const parseImportText = (rawText, fallbackTitle) => {
   const questionBlocks = splitQuestionBlocks(rawText)
   const answerMap = parseAnswerMap(rawText)
   const answerDetailMap = parseAnswerDetails(rawText)
+  const clozeOptionMap = parseClozeOptionBlock(rawText)
   const seenQuestionNumbers = new Set()
   const questions = []
 
@@ -965,7 +1018,8 @@ const parseImportText = (rawText, fallbackTitle) => {
       ? parseSharedCandidateOptions(`${prefixText}
 ${block}`, inferredType.typeHint === 'five_choose_four' ? 5 : 7)
       : []
-    const candidateOptions = sharedOptions.length ? sharedOptions : (inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions)
+    const clozeOptions = inferredType.typeHint === 'cloze' ? (clozeOptionMap.get(questionNo) || []) : []
+    const candidateOptions = clozeOptions.length ? clozeOptions : (sharedOptions.length ? sharedOptions : (inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions))
     const options = sanitizeQuestionOptions(candidateOptions, inferredType.typeHint)
     const answerRaw = block.match(/(?:答案|参考答案)[:：]\s*(.+)/)?.[1]?.trim() || ''
     const answerDetail = sanitizeImportedField(answerDetailMap.get(questionNo) || '')
@@ -2071,5 +2125,6 @@ module.exports = router
 module.exports.__test = {
   parseImportText,
   getParserDiagnostics,
+  parseClozeOptionBlock,
   questionTypeRuleRegistry,
 }

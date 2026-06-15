@@ -243,6 +243,31 @@ const clozeOptionMap = {
   44: ['honest', 'patient', 'polite'],
   45: ['change', 'forget', 'accept'],
 }
+
+const clozeOptionBlockSmokeText = `第三部分 语言运用
+第一节 完形填空
+Oh, no? How silly I was to practice basketball inside!
+36．A. cup     B. bowl     C. spoon
+37. A. fact
+B. idea
+C. trouble
+38． A. proudly  B. angrily  C. worriedly
+39 A. pass on  B. show off  C. think about
+40．A. sleeping  B. crying  C. running
+41．A. lie B. joke C. advice
+42．A. refused B. promised C. explained
+43．A. wrong B. strange C. difficult
+44．A. honest B. patient C. polite
+45．A. change B. forget C. accept
+第二节
+阅读下面短文，在空白处填入 1 个适当的单词。`
+const parsedClozeOptionBlock = __test.parseClozeOptionBlock(clozeOptionBlockSmokeText)
+Object.entries(clozeOptionMap).forEach(([questionNo, expectedOptions]) => {
+  const actualOptions = parsedClozeOptionBlock.get(questionNo)
+  if (!actualOptions || actualOptions.length !== 3 || expectedOptions.some((expected, index) => actualOptions[index] !== expected)) {
+    throw new Error(`Expected parseClozeOptionBlock question ${questionNo} options ${JSON.stringify(expectedOptions)}, got ${JSON.stringify(actualOptions)}`)
+  }
+})
 const generatedCloze = `第三部分 语言运用
 第一节 完形填空
 阅读下面的短文，掌握其大意，然后从各题所给的 A、B、C 三个选项中选出一个最佳选项。
@@ -336,6 +361,11 @@ for (let index = 1; index < orderedQuestionNumbers.length; index += 1) {
   }
 }
 
+const duplicateQuestionNumbers = orderedQuestionNumbers.filter((numberValue, index) => orderedQuestionNumbers.indexOf(numberValue) !== index)
+if (duplicateQuestionNumbers.length > 0) {
+  throw new Error(`Expected no duplicate question numbers, got ${duplicateQuestionNumbers.join(', ')}`)
+}
+
 for (const n of Array.from({ length: 20 }, (_, index) => String(index + 1))) {
   const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n)
   if (question?.metadata?.typeHint !== 'listening' || question.type !== 'CHOICE' || question.options?.length !== 3 || question.metadata?.materialLocalId) {
@@ -422,6 +452,13 @@ for (const n of Array.from({ length: 10 }, (_, index) => String(36 + index))) {
   if (question?.metadata?.typeHint !== 'cloze') {
     throw new Error(`Expected cloze question ${n} to keep cloze typeHint`)
   }
+  if (!question?.metadata?.materialLocalId?.startsWith('cloze-')) {
+    throw new Error(`Expected cloze question ${n} to bind to cloze material`)
+  }
+}
+const question46ForClozeBinding = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '46')
+if (question46ForClozeBinding?.metadata?.materialLocalId?.startsWith('cloze-')) {
+  throw new Error('Expected question 46 not to bind to cloze material')
 }
 
 
