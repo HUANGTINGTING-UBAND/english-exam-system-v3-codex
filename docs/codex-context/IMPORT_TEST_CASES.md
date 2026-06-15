@@ -296,3 +296,16 @@ node scripts/smoke-import-parser.js
 - 综合技能材料不能包含 56—60 的题干；这些题干必须作为独立草稿题。
 - 没有明确 `解析：/答案解析：/解题思路：/原因：` 标记时，`explanation` 应为空，section 说明不得进入 explanation。
 - `answer` 和 `options` 不得包含 section heading 或下一篇材料开头。
+
+## 13. 湖南中考 PDF 字段污染回归用例
+
+本轮真实 PDF 导入 smoke 需同时验证“61 题完整性”和字段质量，不能只按题目数量验收：
+
+- 题目必须按 1—61 升序写入和展示，不得把作文要求中的“80 个左右”识别为第 80 题。
+- 1—20 为 `listening` 选择题，三选项完整且不绑定阅读材料。
+- 21—23 归入 `reading_image-1` 占位材料，提示图片/图表需人工补充；第 23 题选项不得包含 `The Tan family` 等下一篇材料正文。
+- 32—35 为 `seven_choice` 共享候选项题组，四道题可显示为“第32空”等短题干；A-E 候选项属于题组材料或共享选项，不得复用到完形填空。
+- 36—45 为 `cloze`，每题独立解析 A/B/C 三个选项，例如第 36 题为 `cup / bowl / spoon`，第 40 题为 `sleeping / crying / running`。
+- 46—55 为 `fill_blank`，当前 schema 无 `FILL_BLANK` 枚举时使用兼容题型保存，但 `metadata.typeHint` 必须为 `fill_blank`，不得映射为 `TRANSLATION` 或 `CLOZE`，且不得显示选择题选项。
+- 56—59 为综合技能回答问题，60 为翻译，61 为写作；这些非选择题不得显示“选择题填 0/1/2/3”提示。
+- 没有明确“解析：/答案解析：/解题思路：/原因：”时，`explanation` 应为空；section 说明、题型说明不得进入 `questionText`、`options`、`answer` 或 `explanation`。

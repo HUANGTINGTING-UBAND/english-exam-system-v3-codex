@@ -168,7 +168,7 @@ const detectTypeHintFromContext = (text) => {
 
   if (/书面表达|写作|作文/i.test(value)) return { type: 'WRITING', typeHint: 'writing' }
   if (/翻译|英汉互译|汉译英|英译汉/i.test(value)) return { type: 'TRANSLATION', typeHint: 'translation' }
-  if (/语法填空|短文填空|综合填空|填空/i.test(value)) return { type: 'CLOZE', typeHint: 'fill_blank' }
+  if (/语法填空|短文填空|综合填空|填空/i.test(value)) return { type: 'ERROR_CORRECTION', typeHint: 'fill_blank' }
   if (/完形填空|完形/i.test(value)) return { type: 'CLOZE', typeHint: 'cloze' }
   if (/阅读理解|阅读|短文理解/i.test(value)) return { type: 'CHOICE', typeHint: 'reading' }
   if (/听力|对话|录音/i.test(value)) return { type: 'CHOICE', typeHint: 'listening' }
@@ -183,7 +183,7 @@ const detectTypeHintByQuestionNumber = (questionNo) => {
   if (numberValue >= 21 && numberValue <= 31) return { type: 'CHOICE', typeHint: 'reading' }
   if (numberValue >= 32 && numberValue <= 35) return { type: 'CHOICE', typeHint: 'seven_choice' }
   if (numberValue >= 36 && numberValue <= 45) return { type: 'CLOZE', typeHint: 'cloze' }
-  if (numberValue >= 46 && numberValue <= 55) return { type: 'TRANSLATION', typeHint: 'fill_blank' }
+  if (numberValue >= 46 && numberValue <= 55) return { type: 'ERROR_CORRECTION', typeHint: 'fill_blank' }
   if (numberValue >= 56 && numberValue <= 59) return { type: 'TRANSLATION', typeHint: 'subjective' }
   if (numberValue === 60) return { type: 'TRANSLATION', typeHint: 'translation' }
   if (numberValue === 61) return { type: 'WRITING', typeHint: 'writing' }
@@ -325,7 +325,7 @@ const sanitizeImportedField = (value) => {
   if (!text) return ''
   const boundaryMatch = fieldBoundaryRegex.exec(text)
   const cleanText = boundaryMatch ? text.slice(0, boundaryMatch.index).trim() : text
-  return cleanText.replace(/\s+/g, ' ').trim()
+  return cleanText.replace(/\s+/g, ' ').replace(/\s+[A-C]\s*$/, '').trim()
 }
 
 const sanitizeQuestionOptions = (options, typeHint) => {
@@ -378,6 +378,10 @@ const splitQuestionBlocks = (rawText) => {
   while (match) {
     const lineStart = match.index + match[1].length
     const questionNo = match[2]
+    if (Number(questionNo) > 61) {
+      match = markerRegex.exec(normalizedText)
+      continue
+    }
     const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 260)
     const previousChar = normalizedText[lineStart - 1] || ''
     const sameLineBeforeMarker = normalizedText.slice(normalizedText.lastIndexOf('\n', lineStart - 1) + 1, lineStart)
@@ -434,7 +438,7 @@ const splitFallbackChoiceBlocks = (formalText) => {
     const lineStart = match.index + match[1].length
     const previousChar = text[lineStart - 1] || ''
 
-    if (!/[A-Za-z0-9]/.test(previousChar)) {
+    if (!/[A-Za-z0-9]/.test(previousChar) && Number(match[2]) <= 61) {
       markers.push({ index: lineStart, questionNo: match[2] })
     }
 

@@ -123,8 +123,28 @@ const handleConfirm = async () => {
   await loadJobs()
 }
 
+
+const answerLabel = (question) => {
+  const typeHint = question?.typeHint || ''
+  if (['choice', 'listening', 'reading', 'seven_choice', 'cloze'].includes(typeHint) || question?.type === 'CHOICE' || question?.type === 'CLOZE') return '答案（选择题可填 A/B/C/D 或 0/1/2/3）'
+  if (typeHint === 'fill_blank') return '答案'
+  if (['subjective', 'reading_answer', 'short_answer'].includes(typeHint)) return '参考答案'
+  if (typeHint === 'translation') return '参考译文'
+  if (typeHint === 'writing') return '范文/参考答案/写作略'
+  return '答案'
+}
+
+const shouldShowOptions = (question) => {
+  const typeHint = question?.typeHint || ''
+  return ['choice', 'listening', 'reading', 'seven_choice', 'cloze'].includes(typeHint) || ['CHOICE', 'CLOZE'].includes(question?.type)
+}
 const normalizeOptions = (value) => String(value || '').split('\n').map((item) => item.trim()).filter(Boolean)
-const normalizeAnswer = (question) => question.type === 'CHOICE' ? Number(question.answerText) : question.answerText
+const normalizeAnswer = (question) => {
+  const answerText = String(question.answerText ?? '').trim()
+  if (!['CHOICE', 'CLOZE'].includes(question.type)) return answerText
+  if (/^[A-D]$/i.test(answerText)) return { A: 0, B: 1, C: 2, D: 3 }[answerText.toUpperCase()]
+  return answerText === '' ? null : Number(answerText)
+}
 
 const prepareJobForEdit = (job) => {
   if (!job) return job
@@ -195,7 +215,7 @@ onMounted(() => {
       </div>
 
       <h3>草稿题目</h3>
-      <div v-for="question in selectedJob.questions" :key="question.id" class="admin-form-card"><p class="question-meta"><span>真实题型：{{ question.typeHint }}</span><span>题号：{{ question.metadata?.questionNo || question.orderIndex }}</span></p><label>题型<select v-model="question.type"><option>CHOICE</option><option>READING</option><option>CLOZE</option><option>TRANSLATION</option><option>WRITING</option><option>ERROR_CORRECTION</option></select></label><label>题干<textarea v-model="question.text" rows="3"></textarea></label><label v-if="['CHOICE', 'CLOZE'].includes(question.type)">选项（每行一个）<textarea v-model="question.optionsText" rows="4"></textarea></label><label>答案（选择题填 0/1/2/3）<input v-model="question.answerText" /></label><label>解析<textarea v-model="question.explanation" rows="2"></textarea></label><label>知识点<input v-model="question.knowledgePoint" /></label><label>分值<input v-model.number="question.score" type="number" min="0" /></label><label>材料ID<input v-model="question.materialLocalId" placeholder="如 reading-001" /></label><button class="secondary-btn" @click="saveQuestion(question)">保存题目</button></div>
+      <div v-for="question in selectedJob.questions" :key="question.id" class="admin-form-card"><p class="question-meta"><span>真实题型：{{ question.typeHint }}</span><span>题号：{{ question.metadata?.questionNo || question.orderIndex }}</span></p><label>题型<select v-model="question.type"><option>CHOICE</option><option>READING</option><option>CLOZE</option><option>TRANSLATION</option><option>WRITING</option><option>ERROR_CORRECTION</option></select></label><label>题干<textarea v-model="question.text" rows="3"></textarea></label><label v-if="shouldShowOptions(question)">选项（每行一个）<textarea v-model="question.optionsText" rows="4"></textarea></label><label>{{ answerLabel(question) }}<input v-model="question.answerText" /></label><label>解析<textarea v-model="question.explanation" rows="2"></textarea></label><label>知识点<input v-model="question.knowledgePoint" /></label><label>分值<input v-model.number="question.score" type="number" min="0" /></label><label>材料ID<input v-model="question.materialLocalId" placeholder="如 reading-001" /></label><button class="secondary-btn" @click="saveQuestion(question)">保存题目</button></div>
 
     </section>
   </div>

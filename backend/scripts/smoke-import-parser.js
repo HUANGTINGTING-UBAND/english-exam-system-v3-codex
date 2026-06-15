@@ -202,8 +202,10 @@ const generatedListening = Array.from({ length: 20 }, (_, index) => {
 A. Music. B. History. C. English.`
 }).join('\n')
 const generatedReadingA = `A
-${[21, 22, 23].map((n) => `${n}．What is reading question ${n}?
-A. One. B. Two. C. Three. D. Four.`).join('\n')}`
+${[21, 22].map((n) => `${n}．What is reading question ${n}?
+A. One. B. Two. C. Three.`).join('\n')}
+23．Where can we read the text most probably?
+A. In a primary school. B. In a middle school. C. In a university.`
 const generatedReadingB = `B
 The Tan family, from Hunan, love sharing stories about their new life. They work together and help each other every day.
 ${[24, 25, 26, 27].map((n) => `${n}．What is reading question ${n}?
@@ -227,16 +229,28 @@ B. Keep the classroom clean.
 C. Work with your classmates.
 D. Share your ideas.
 E. Make your school better.`
+const clozeOptionMap = {
+  36: ['cup', 'bowl', 'spoon'],
+  37: ['fact', 'idea', 'trouble'],
+  38: ['proudly', 'angrily', 'worriedly'],
+  39: ['pass on', 'show off', 'think about'],
+  40: ['sleeping', 'crying', 'running'],
+  41: ['lie', 'joke', 'advice'],
+  42: ['refused', 'promised', 'explained'],
+  43: ['wrong', 'strange', ' difficult'.trim()],
+  44: ['honest', 'patient', 'polite'],
+  45: ['change', 'forget', 'accept'],
+}
 const generatedCloze = `第三部分 语言运用
 第一节 完形填空
 阅读下面的短文，掌握其大意，然后从各题所给的 A、B、C 三个选项中选出一个最佳选项。
 Oh, no? How silly I was to practice basketball inside! That gave me a (n)
 ${Array.from({ length: 10 }, (_, index) => {
   const n = 36 + index
-  const options = n === 36 ? 'A. cup B. bowl C. spoon' : (n === 40 ? 'A. sleeping B. crying C. running' : 'A. first B. second C. third')
-  const context = n === 45 ? 'He jumped up and gave me a big lick to show he was happy.' : `The story continued around blank ${n}.`
+  const [a, b, c] = clozeOptionMap[n]
+  const context = n === 45 ? 'He jumped up and gave me a big lick (舔) then I felt fine.' : `The story continued around blank ${n}.`
   return `${n}．${context}
-${options}`
+A. ${a} B. ${b} C. ${c}`
 }).join('\n')}`
 const generatedFillBlank = `第二节（共 10 小题）
 阅读下面短文，在空白处填入 1 个适当的单词或括号内单词的正确形式。
@@ -246,13 +260,19 @@ ${Array.from({ length: 10 }, (_, index) => `${46 + index}．${index === 0 ? 'The
 const generatedSubjective = `第四部分 综合技能
 第一节（共 5 小题）
 阅读下面短文，根据短文内容回答问题或翻译画线部分。
-My name is Jeff. I like learning foreign languages. I often practice English with my friends.
+My name is Jeff. I like learning foreign languages. I often practice English with my friends. Study tours bring even more possibilities to my life.
 56．When did Jeff begin to learn Chinese?
 57．Who suggested a study tour in China?
 58．What do you think of Jeff?
 59．What new things will you try after reading Jeff’s story? Why?
 60．将短文中画线部分翻译成中文。`
-const generatedWriting = `61．在假期，我们应该更多地陪伴家人还是朋友呢？请写一篇英语短文表达你的观点。`
+const generatedWriting = `61．在假期，我们应该更多地陪伴家人还是朋友呢？请写一篇英语短文表达你的观点。
+内容包括：（1）陈述你的观点并说明理由；（2）结合观点，介绍你的假期计划。
+注意：（1）文中不得出现真实姓名和校名等信息；（2）写作词数为 80 个左右。
+Spending more time with family or friends?
+Li Hua: I prefer family time during the holiday.
+Mike: I want to travel with friends and learn new things.
+Gina: Both family and friends are important to me.`
 const generatedAnswers = `英语参考答案
 1．B 2．A 3．C 4．A 5．C
 46．The 47．provided 48．word2 49．word3 50．word4 51．word5 52．word6 53．word7 54．word8 55．word9
@@ -287,8 +307,8 @@ console.log(JSON.stringify({
   warningCodes: [...new Set(fullPaperParsed.warnings.map((warning) => warning.code))],
 }, null, 2))
 
-if (fullPaperParsed.questions.length < 60) {
-  throw new Error(`Expected full paper to keep at least 60 questions, got ${fullPaperParsed.questions.length}`)
+if (fullPaperParsed.questions.length !== 61) {
+  throw new Error(`Expected full paper to keep exactly 61 questions, got ${fullPaperParsed.questions.length}`)
 }
 
 for (const requiredNo of ['1', '20', '21', '31', '32', '35', '36', '45', '46', '55', '56', '60', '61']) {
@@ -303,6 +323,9 @@ if (fullQuestionOne?.metadata?.typeHint !== 'listening' || fullQuestionOne.type 
 }
 
 const orderedQuestionNumbers = fullPaperParsed.questions.map((question) => Number(question.metadata?.questionNo))
+if (Math.max(...orderedQuestionNumbers) !== 61 || orderedQuestionNumbers.includes(80)) {
+  throw new Error('Expected question numbers to stop at 61 and never synthesize writing word-count 80 as a question')
+}
 for (let index = 1; index < orderedQuestionNumbers.length; index += 1) {
   if (orderedQuestionNumbers[index] < orderedQuestionNumbers[index - 1]) {
     throw new Error('Expected questions to be sorted by question number')
@@ -324,6 +347,10 @@ if (!readingAMaterial || !readingAMaterial.title.includes('图片/图表题') ||
 }
 if (!readingAQuestions.every((question) => question?.metadata?.materialLocalId === readingAMaterialId)) {
   throw new Error('Expected questions 21-23 to share the reading A placeholder material')
+}
+const question23 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '23')
+if (question23?.options?.length !== 3 || JSON.stringify(question23.options).includes('The Tan family')) {
+  throw new Error('Expected question 23 to keep only three image-reading options and exclude B material text')
 }
 
 if (!fullMaterialsByContent.tan || fullMaterialsByContent.tan.content.includes('23．')) {
@@ -367,12 +394,17 @@ if (!fullMaterialsByContent.cloze || fullMaterialsByContent.cloze.content.includ
 }
 
 const question36 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '36')
-if (!question36?.options?.some((option) => option.includes('cup')) || !question36.options.some((option) => option.includes('bowl')) || !question36.options.some((option) => option.includes('spoon'))) {
-  throw new Error('Expected question 36 options to include cup / bowl / spoon')
+const assertOptionTexts = (questionNo, expectedOptions) => {
+  const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === String(questionNo))
+  const normalizedOptions = (question?.options || []).map((option) => String(option).trim())
+  if (normalizedOptions.length !== expectedOptions.length || expectedOptions.some((expected, index) => normalizedOptions[index] !== expected)) {
+    throw new Error(`Expected question ${questionNo} options ${JSON.stringify(expectedOptions)}, got ${JSON.stringify(normalizedOptions)}`)
+  }
 }
-const question40 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '40')
-if (!question40?.options?.some((option) => option.includes('sleeping')) || !question40.options.some((option) => option.includes('crying')) || !question40.options.some((option) => option.includes('running'))) {
-  throw new Error('Expected question 40 options to include sleeping / crying / running')
+Object.entries(clozeOptionMap).forEach(([questionNo, expectedOptions]) => assertOptionTexts(questionNo, expectedOptions))
+const clozeOptionSignatures = new Set(Array.from({ length: 10 }, (_, index) => JSON.stringify(fullPaperParsed.questions.find((item) => item.metadata?.questionNo === String(36 + index))?.options || [])))
+if (clozeOptionSignatures.size <= 1) {
+  throw new Error('Expected cloze questions 36-45 to have independent option sets, not one shared option group')
 }
 
 for (const n of Array.from({ length: 10 }, (_, index) => String(36 + index))) {
@@ -393,8 +425,14 @@ for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
   }
 }
 const question46 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '46')
-if (question46?.type === 'CLOZE' || question46?.text?.includes('(provide) water') || question46?.text?.includes('48 (cut)')) {
-  throw new Error('Expected question 46 to be fill_blank-compatible, not CLOZE, and not contain the whole passage')
+if (question46?.type === 'CLOZE' || question46?.type === 'TRANSLATION' || question46?.text?.includes('(provide) water') || question46?.text?.includes('48 (cut)')) {
+  throw new Error('Expected question 46 to be fill_blank-compatible, not TRANSLATION/CLOZE, and not contain the whole passage')
+}
+for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
+  const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n)
+  if (Array.isArray(question?.options) && question.options.length > 0) {
+    throw new Error(`Expected fill_blank question ${n} to have no choice options`)
+  }
 }
 
 if (!fullMaterialsByContent.subjective || fullMaterialsByContent.subjective.content.includes('When did Jeff begin') || fullMaterialsByContent.subjective.content.includes('Who suggested') || fullMaterialsByContent.subjective.content.includes('Translate the underlined')) {
@@ -427,6 +465,9 @@ const writingQuestion = fullPaperParsed.questions.find((question) => question.me
 if (writingQuestion?.metadata?.typeHint !== 'writing' || writingQuestion.type === 'CHOICE') {
   throw new Error('Expected question 61 to be preserved as writing')
 }
+if (!writingQuestion.text.includes('写作词数为 80 个左右') || !writingQuestion.text.includes('Mike') || !writingQuestion.text.includes('Gina')) {
+  throw new Error('Expected question 61 writing prompt to keep word-count instruction and forum posts from Mike/Gina')
+}
 
 const sectionHeadingPattern = /第一部分|第二部分|第三部分|第四部分|第一节|第二节|完形填空|语法填空|综合技能|英语参考答案/
 const materialStartPattern = /The Tan family|What are insects|Oh, no\?|Long, long ago/
@@ -436,7 +477,9 @@ for (const question of fullPaperParsed.questions) {
   if (JSON.stringify(question.options || []).match(materialStartPattern)) throw new Error(`Expected question ${question.metadata?.questionNo} options not to contain material starts`)
   if (question.explanation && explanationInstructionPattern.test(question.explanation)) throw new Error(`Expected question ${question.metadata?.questionNo} explanation not to contain section instructions`)
   if (question.explanation && !/解析|答案解析|解题思路|原因/.test(question.explanation)) throw new Error(`Expected question ${question.metadata?.questionNo} explanation to be empty unless explicit analysis marker exists`)
+  if (!['CHOICE', 'CLOZE'].includes(question.type) && Array.isArray(question.options) && question.options.length > 0) throw new Error(`Expected non-choice question ${question.metadata?.questionNo} not to expose choice options`)
 }
+
 const duplicateWarnings = fullPaperParsed.warnings.filter((warning) => warning.code === 'DUPLICATE_QUESTION_NUMBER')
 if (duplicateWarnings.length > 0) {
   throw new Error('Expected answer section not to create duplicate question warnings')
