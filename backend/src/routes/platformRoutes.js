@@ -36,6 +36,195 @@ const formatClassroom = (classroom) => {
 const validQuestionTypes = new Set(['CHOICE', 'TRANSLATION', 'ERROR_CORRECTION', 'WRITING', 'READING', 'CLOZE'])
 const answerLetterMap = { A: 0, B: 1, C: 2, D: 3 }
 
+const questionTypeRuleRegistry = [
+  {
+    typeHint: 'listening_choice',
+    compatibleType: 'CHOICE',
+    keywords: ['听力', '听下面', '录音', 'conversation', 'passage'],
+    hasMaterial: false,
+    optionMode: 'per_question',
+    answerFormats: ['1-5 ABCDA', '1. A 2. B', '1 A'],
+    warnings: ['MISSING_CHOICE_ANSWER', 'CHOICE_OPTIONS_INCOMPLETE'],
+  },
+  {
+    typeHint: 'listening_word_choice',
+    compatibleType: 'CHOICE',
+    keywords: ['听音选单词', '听录音选单词'],
+    hasMaterial: false,
+    optionMode: 'per_question',
+    answerFormats: ['letter'],
+    warnings: ['AUDIO_TEXT_UNCERTAIN'],
+  },
+  {
+    typeHint: 'listening_image_choice',
+    compatibleType: 'CHOICE',
+    keywords: ['听音选图片', '听录音选图片'],
+    hasMaterial: true,
+    optionMode: 'per_question',
+    answerFormats: ['letter'],
+    warnings: ['MATERIAL_IMAGE_NOT_EXTRACTED'],
+  },
+  {
+    typeHint: 'listening_true_false',
+    compatibleType: 'CHOICE',
+    keywords: ['听音判断', '听录音判断', '判断正误'],
+    hasMaterial: false,
+    optionMode: 'true_false',
+    answerFormats: ['T/F', 'true/false'],
+    warnings: ['ANSWER_MATCH_UNCERTAIN'],
+  },
+  {
+    typeHint: 'reading_choice',
+    compatibleType: 'CHOICE',
+    keywords: ['阅读理解', '阅读下列材料', '仔细阅读'],
+    hasMaterial: true,
+    optionMode: 'per_question',
+    answerFormats: ['letter'],
+    warnings: ['MATERIAL_GROUP_UNCERTAIN'],
+  },
+  {
+    typeHint: 'image_based_question',
+    compatibleType: 'CHOICE',
+    keywords: ['看图', '图片', '图表', 'chart', 'poster'],
+    hasMaterial: true,
+    optionMode: 'per_question',
+    answerFormats: ['letter', 'text'],
+    warnings: ['MATERIAL_IMAGE_NOT_EXTRACTED'],
+  },
+  {
+    typeHint: 'five_choose_four',
+    compatibleType: 'CHOICE',
+    keywords: ['五选四', '选句还原', '短文还原'],
+    hasMaterial: true,
+    optionMode: 'shared_options',
+    answerFormats: ['letter'],
+    warnings: ['SHARED_OPTIONS_UNCERTAIN', 'MATERIAL_GROUP_UNCERTAIN'],
+  },
+  {
+    typeHint: 'seven_choose_five',
+    compatibleType: 'CHOICE',
+    keywords: ['七选五'],
+    hasMaterial: true,
+    optionMode: 'shared_options',
+    answerFormats: ['letter'],
+    warnings: ['SHARED_OPTIONS_UNCERTAIN', 'MATERIAL_GROUP_UNCERTAIN'],
+  },
+  {
+    typeHint: 'cloze',
+    compatibleType: 'CLOZE',
+    keywords: ['完形填空'],
+    hasMaterial: true,
+    optionMode: 'per_question',
+    answerFormats: ['letter'],
+    warnings: ['CLOZE_OPTIONS_UNCERTAIN', 'MATERIAL_GROUP_UNCERTAIN'],
+  },
+  {
+    typeHint: 'word_bank',
+    compatibleType: 'ERROR_CORRECTION',
+    keywords: ['选词填空', '方框选词', 'word bank'],
+    hasMaterial: true,
+    optionMode: 'shared_options',
+    answerFormats: ['word'],
+    warnings: ['SHARED_OPTIONS_UNCERTAIN'],
+  },
+  {
+    typeHint: 'fill_blank',
+    compatibleType: 'ERROR_CORRECTION',
+    keywords: ['语法填空', '短文填空', '用所给词适当形式填空', '在空白处填入'],
+    hasMaterial: true,
+    optionMode: 'none',
+    answerFormats: ['word', 'phrase'],
+    warnings: ['ANSWER_MATCH_UNCERTAIN'],
+  },
+  {
+    typeHint: 'error_correction',
+    compatibleType: 'ERROR_CORRECTION',
+    keywords: ['短文改错', '改错'],
+    hasMaterial: true,
+    optionMode: 'none',
+    answerFormats: ['correction'],
+    warnings: ['ANSWER_MATCH_UNCERTAIN'],
+  },
+  {
+    typeHint: 'matching',
+    compatibleType: 'READING',
+    keywords: ['匹配', '长篇阅读', '信息匹配', '段落匹配'],
+    hasMaterial: true,
+    optionMode: 'shared_options',
+    answerFormats: ['letter', 'paragraph'],
+    warnings: ['MATCHING_OPTIONS_UNCERTAIN'],
+  },
+  {
+    typeHint: 'reading_answer',
+    compatibleType: 'TRANSLATION',
+    keywords: ['回答问题', '任务型阅读', '根据短文内容回答问题'],
+    hasMaterial: true,
+    optionMode: 'none',
+    answerFormats: ['text'],
+    warnings: ['ANSWER_MATCH_UNCERTAIN'],
+  },
+  {
+    typeHint: 'copy_sentence',
+    compatibleType: 'WRITING',
+    keywords: ['抄写句子', '正确抄写'],
+    hasMaterial: false,
+    optionMode: 'none',
+    answerFormats: ['text'],
+    warnings: ['HANDWRITING_REVIEW_REQUIRED'],
+  },
+  {
+    typeHint: 'odd_one_out',
+    compatibleType: 'CHOICE',
+    keywords: ['不同类', '找出不同'],
+    hasMaterial: false,
+    optionMode: 'per_question',
+    answerFormats: ['letter'],
+    warnings: ['ANSWER_MATCH_UNCERTAIN'],
+  },
+  {
+    typeHint: 'word_box_fill',
+    compatibleType: 'ERROR_CORRECTION',
+    keywords: ['方框选词', '选词填空'],
+    hasMaterial: true,
+    optionMode: 'shared_options',
+    answerFormats: ['word'],
+    warnings: ['SHARED_OPTIONS_UNCERTAIN'],
+  },
+  {
+    typeHint: 'picture_word_choice',
+    compatibleType: 'CHOICE',
+    keywords: ['看图选词', '看图选择'],
+    hasMaterial: true,
+    optionMode: 'per_question',
+    answerFormats: ['letter', 'word'],
+    warnings: ['MATERIAL_IMAGE_NOT_EXTRACTED'],
+  },
+  {
+    typeHint: 'translation',
+    compatibleType: 'TRANSLATION',
+    keywords: ['翻译画线句子', '翻译成中文', '翻译成英文', '汉译英', '英译汉'],
+    hasMaterial: false,
+    optionMode: 'none',
+    answerFormats: ['text'],
+    warnings: ['ANSWER_MATCH_UNCERTAIN'],
+  },
+  {
+    typeHint: 'writing',
+    compatibleType: 'WRITING',
+    keywords: ['写作', '书面表达', '作文', 'writing'],
+    hasMaterial: false,
+    optionMode: 'none',
+    answerFormats: ['essay', 'sample'],
+    warnings: ['RUBRIC_MISSING'],
+  },
+]
+
+const detectRuleFromContext = (text) => {
+  const value = String(text || '')
+  return questionTypeRuleRegistry.find((rule) => rule.keywords.some((keyword) => new RegExp(keyword, 'i').test(value))) || null
+}
+
+
 const normalizeDraftQuestionType = (value, warnings, context = '') => {
   const text = String(value || '').trim().toUpperCase()
   const aliasMap = {
@@ -163,17 +352,27 @@ const isChoiceLikeQuestion = (text, options) => {
   return /[?？]$/.test(String(text || '').trim()) && options.length > 0
 }
 
+const legacyParserTypeHintMap = {
+  listening_choice: 'listening',
+  reading_choice: 'reading',
+  five_choose_four: 'seven_choice',
+  seven_choose_five: 'seven_choice',
+  reading_answer: 'subjective',
+  short_answer: 'subjective',
+}
+
 const detectTypeHintFromContext = (text) => {
-  const value = String(text || '')
+  const matchedRule = detectRuleFromContext(text)
 
-  if (/书面表达|写作|作文/i.test(value)) return { type: 'WRITING', typeHint: 'writing' }
-  if (/翻译|英汉互译|汉译英|英译汉/i.test(value)) return { type: 'TRANSLATION', typeHint: 'translation' }
-  if (/语法填空|短文填空|综合填空|填空/i.test(value)) return { type: 'ERROR_CORRECTION', typeHint: 'fill_blank' }
-  if (/完形填空|完形/i.test(value)) return { type: 'CLOZE', typeHint: 'cloze' }
-  if (/阅读理解|阅读|短文理解/i.test(value)) return { type: 'CHOICE', typeHint: 'reading' }
-  if (/听力|对话|录音/i.test(value)) return { type: 'CHOICE', typeHint: 'listening' }
+  if (matchedRule) {
+    return {
+      type: matchedRule.compatibleType,
+      typeHint: legacyParserTypeHintMap[matchedRule.typeHint] || matchedRule.typeHint,
+      displayType: matchedRule.typeHint,
+    }
+  }
 
-  return { type: 'CHOICE', typeHint: 'choice' }
+  return { type: 'CHOICE', typeHint: 'choice', displayType: 'choice' }
 }
 
 const detectTypeHintByQuestionNumber = (questionNo) => {
@@ -1784,4 +1983,5 @@ module.exports = router
 module.exports.__test = {
   parseImportText,
   getParserDiagnostics,
+  questionTypeRuleRegistry,
 }

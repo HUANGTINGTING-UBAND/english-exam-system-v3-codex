@@ -309,3 +309,52 @@ node scripts/smoke-import-parser.js
 - 46—55 为 `fill_blank`，当前 schema 无 `FILL_BLANK` 枚举时使用兼容题型保存，但 `metadata.typeHint` 必须为 `fill_blank`，不得映射为 `TRANSLATION` 或 `CLOZE`，且不得显示选择题选项。
 - 56—59 为综合技能回答问题，60 为翻译，61 为写作；这些非选择题不得显示“选择题填 0/1/2/3”提示。
 - 没有明确“解析：/答案解析：/解题思路：/原因：”时，`explanation` 应为空；section 说明、题型说明不得进入 `questionText`、`options`、`answer` 或 `explanation`。
+
+## 16. 多学段代表性样例回归测试集
+
+后续 smoke / regression test 应逐步纳入以下代表性样例。样例中的具体题干、答案、选项只能写在测试 fixture 或断言中，不能写入 parser 主逻辑。
+
+### 16.1 湖南中考英语 PDF
+
+验证目标：听力选择、阅读图片/图表题、阅读选择、五选四、完形填空、语法填空、回答问题、翻译、写作、跨页清洗。
+
+必须覆盖：
+
+- 题目总数 61，不生成作文词数要求导致的第 80 题。
+- 五选四识别为共享候选项题组，候选项数量为 5，不包含正文句子或完形内容。
+- 完形 36—45 为逐题独立 A/B/C 选项，不复用五选四候选项。
+- 46—55 为 `fill_blank`，不是 `translation` 或 `cloze`。
+- 答案区只回填 answer，不生成新题，不产生大量 duplicate warning。
+
+### 16.2 2025 年 6 月大学英语四级真题第 1 套 PDF
+
+验证目标：Writing、Listening Section A/B/C、Reading Section A 选词填空、Reading Section B 长篇匹配、Reading Section C 仔细阅读、Translation。
+
+必须覆盖：
+
+- Writing 独立为 `writing`，题干完整，options 为空。
+- Reading Section A 为 `word_bank`，共享词库不等同于普通 fill_blank。
+- Reading Section B 为 `matching`，段落匹配答案不按普通 choice 处理。
+- Translation 独立为 `translation`，不吞并 Reading 题组。
+
+### 16.3 高考英语全国卷 PDF
+
+验证目标：听力选择、阅读 A-D、七选五、语言运用、写作、页眉水印清洗、跨页材料合并。
+
+必须覆盖：
+
+- 阅读 A-D 各自形成独立 material，关联连续题号。
+- 七选五为 `seven_choose_five`，共享 A-G 候选项，候选项达到 7 个后停止。
+- 写作题中的“80/100 词左右”不生成额外题号。
+- 页眉、水印、分页符不得进入材料、选项、答案或解析。
+
+### 16.4 小升初英语 PDF
+
+验证目标：听音选单词、听音选图片、听音判断、问句选答句、抄写句子、找不同类、方框选词、单选、看图选词、阅读任务。
+
+必须覆盖：
+
+- 听音选图片 / 看图选词在 PDF rawText 缺图时创建图片占位 material 并生成 `MATERIAL_IMAGE_NOT_EXTRACTED`。
+- 抄写句子为 `copy_sentence`，不显示 choice options。
+- 找不同类为 `odd_one_out`，可兼容 `CHOICE`，但保留真实 typeHint。
+- 方框选词为 `word_box_fill`，共享词库不误识别为完形。

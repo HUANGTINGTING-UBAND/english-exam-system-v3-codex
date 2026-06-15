@@ -144,3 +144,9 @@ Exam
 - 后端试卷详情返回 `materials`，题目列表返回每题的 `materialId` 和 `material`。
 - 前端考试页在题目关联材料时显示材料卡片；无材料题目保持原有显示和作答逻辑。
 - 更复杂的 Section、听力音频、图片题和材料多级分组仍为 `NEEDS_VERIFICATION`。
+
+## 10. 多学段导入解析规范索引
+
+多学段、多题型英语试卷导入的通用规范已沉淀到 `docs/codex-context/MULTI_LEVEL_IMPORT_PARSER_SPEC.md`。后续开发 parser 或新增题型时，应优先遵循该文档中的题型注册表、共享/独立选项题组、非选择题映射、答案区与 explanation 规则。
+
+特别注意：小升初、初中/中考、高中/高考、大学四级等样例只能作为 smoke test / regression test；不得把具体题干、答案、选项硬编码进 parser 主逻辑。

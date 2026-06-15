@@ -247,3 +247,12 @@ backend
 - 已新增校对后确认入库接口，将草稿生成正式 `Exam`、`Question`、`QuestionMaterial`，并保留 `ImportJob.examId` 追溯关系。
 - 基础解析覆盖 TXT / DOCX / 文字型 PDF 的文本提取；扫描版 PDF、OCR、图片题、音频持久化仍为 `NEEDS_VERIFICATION`。
 - 教师仅能查看和确认自己创建的导入任务；管理员可查看全部导入任务；学生不能访问导入草稿接口。
+
+## 10. 多学段导入解析规范更新
+
+新增 `docs/codex-context/MULTI_LEVEL_IMPORT_PARSER_SPEC.md` 作为多学段英语试卷导入解析规范。该规范明确：
+
+- 目标支持小升初、初中/中考、高中/高考、大学四级，并预留六级、考研扩展。
+- parser 应按题型注册表 / detector 扩展，而不是为单套 PDF 堆硬编码分支。
+- 当前 schema 不支持的细分题型应通过兼容 enum + `metadata.typeHint` / displayType 保留真实题型。
+- 湖南中考、四级、高考、小升初 PDF 均作为 regression test 代表样例，具体题干和答案不得进入 parser 主逻辑。

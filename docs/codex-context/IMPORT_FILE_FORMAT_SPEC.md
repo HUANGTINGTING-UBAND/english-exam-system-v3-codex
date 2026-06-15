@@ -287,3 +287,13 @@ D. 8:30
 - 五选四 / 七选五按“共享候选项题组”处理；完形填空按“每空独立选项题组”处理；语法填空 / 短文填空按 `metadata.typeHint = fill_blank` 保留真实题型。
 - 参考答案区只用于回填 answer / referenceAnswer，不参与题目生成；没有明确“解析：/答案解析：/解题思路：/原因：”时，explanation 应为空。
 - 写作题中的“80 词左右 / 100 词左右”等字数要求不得识别为题号。
+
+## 13. 多学段通用解析规范入口
+
+详见 `docs/codex-context/MULTI_LEVEL_IMPORT_PARSER_SPEC.md`。导入文件格式与 parser 行为必须遵守以下通用原则：
+
+- 先清洗页眉页脚、页码、水印、分页符和重复空白，再识别题目。
+- part / section / 题型说明只用于判断题型、题号范围、材料边界和分值，不进入题干、选项、答案或解析。
+- 五选四 / 七选五是共享候选项题组；完形填空是逐题独立选项题组；语法填空 / 短文填空是 `fill_blank`，不是翻译题。
+- 参考答案区只用于回填 answer；没有明确解析标记时 explanation 应为空。
+- 具体 PDF 样例只能出现在 smoke test / regression test，不得成为 parser 主逻辑的硬编码条件。
