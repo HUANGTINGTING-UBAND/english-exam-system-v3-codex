@@ -98,6 +98,21 @@ const normalizeImportRawText = (rawText) => {
     .join('\n')
 }
 
+const findAnswerSectionIndex = (rawText) => {
+  const text = String(rawText || '')
+  const titleRegex = /(^|\n)\s*(?:英语\s*)?(?:参考答案|答案与解析|试题解析|解析|详解)\s*(?:[:：]|\n|$)|(^|\n)\s*答案\s*[:：]\s*(?:\n|$)/i
+  const match = titleRegex.exec(text)
+
+  return match ? match.index + (match[1]?.length || match[2]?.length || 0) : -1
+}
+
+const extractFormalQuestionText = (rawText) => {
+  const normalizedText = normalizeImportRawText(rawText)
+  const answerSectionIndex = findAnswerSectionIndex(normalizedText)
+
+  return answerSectionIndex >= 0 ? normalizedText.slice(0, answerSectionIndex) : normalizedText
+}
+
 const getAnswerIndexFromLetter = (letter) => {
   return answerLetterMap[String(letter || '').trim().toUpperCase()] ?? null
 }
@@ -197,7 +212,7 @@ const looksLikeMaterialText = (text) => {
 
 const parseAnswerDetails = (rawText) => {
   const detailMap = new Map()
-  const answerStart = String(rawText || '').search(/答案与解析|参考答案|答案|解析/)
+  const answerStart = findAnswerSectionIndex(rawText)
 
   if (answerStart < 0) {
     return detailMap
@@ -227,12 +242,7 @@ const splitQuestionBlocks = (rawText) => {
     return rawText.split(/\[QUESTION\]/i).slice(1).map((block) => ({ block, materialText: '', typeHint: 'choice' }))
   }
 
-  let normalizedText = normalizeImportRawText(rawText)
-  const answerSectionIndex = normalizedText.search(/答案与解析|参考答案|答案|解析/)
-
-  if (answerSectionIndex >= 0) {
-    normalizedText = normalizedText.slice(0, answerSectionIndex)
-  }
+  const normalizedText = extractFormalQuestionText(rawText)
 
   const markerRegex = /(^|\n|\s)(?:第\s*)?(\d{1,3})\s*(?:题)?(?:[\.．、\)]\s*|\s+)/g
   const markers = []
@@ -264,6 +274,10 @@ const splitQuestionBlocks = (rawText) => {
     match = markerRegex.exec(normalizedText)
   }
 
+  if (markers.length === 0) {
+    return splitFallbackChoiceBlocks(normalizedText)
+  }
+
   return markers.map((marker, index) => {
     const nextMarker = markers[index + 1]
     const previousMarker = markers[index - 1]
@@ -279,6 +293,43 @@ const splitQuestionBlocks = (rawText) => {
       detectedType: marker.detected.type,
     }
   })
+}
+
+const splitFallbackChoiceBlocks = (formalText) => {
+  const text = String(formalText || '')
+  const markerRegex = /(^|\n|\s)(\d{1,3})\s*[\.．、\)]\s*/g
+  const markers = []
+  let match = markerRegex.exec(text)
+
+  while (match) {
+    const lineStart = match.index + match[1].length
+    const previousChar = text[lineStart - 1] || ''
+
+    if (!/[A-Za-z0-9]/.test(previousChar)) {
+      markers.push({ index: lineStart, questionNo: match[2] })
+    }
+
+    match = markerRegex.exec(text)
+  }
+
+  return markers.map((marker, index) => {
+    const nextMarker = markers[index + 1]
+    const block = text.slice(marker.index, nextMarker ? nextMarker.index : text.length).trim()
+    const options = parseInlineOptions(block)
+    const questionNumberDetected = detectTypeHintByQuestionNumber(marker.questionNo)
+
+    if (options.length < 3) {
+      return null
+    }
+
+    return {
+      block,
+      materialText: '',
+      typeHint: questionNumberDetected?.typeHint || 'listening',
+      detectedType: 'CHOICE',
+      source: 'fallback-choice',
+    }
+  }).filter(Boolean)
 }
 
 const parseInlineOptions = (block) => {
@@ -427,6 +478,33 @@ const parseImportText = (rawText, fallbackTitle) => {
   }
 
   return { examMeta, materials, questions, warnings }
+}
+
+const getParserDiagnostics = (rawText, fallbackTitle = 'parser diagnostics') => {
+  const formalQuestionText = extractFormalQuestionText(rawText)
+  const parsed = parseImportText(rawText, fallbackTitle)
+  const firstQuestionMatch = formalQuestionText.match(/(^|\n|\s)1\s*[\.．、\)]\s*([\s\S]{0,220})/)
+  const secondQuestionMatch = formalQuestionText.match(/(^|\n|\s)2\s*[\.．、\)]\s*([\s\S]{0,220})/)
+  const thirdQuestionMatch = formalQuestionText.match(/(^|\n|\s)3\s*[\.．、\)]\s*([\s\S]{0,220})/)
+  const firstQuestionBlock = splitQuestionBlocks(rawText)[0]?.block || firstQuestionMatch?.[0] || ''
+  const firstQuestionOptions = parseInlineOptions(firstQuestionBlock)
+
+  return {
+    formalQuestionTextFound: Boolean(formalQuestionText.trim()),
+    formalQuestionTextLength: formalQuestionText.length,
+    formalQuestionTextPreview: formalQuestionText.slice(0, 500),
+    matchedQuestionNumbers: {
+      1: Boolean(firstQuestionMatch),
+      2: Boolean(secondQuestionMatch),
+      3: Boolean(thirdQuestionMatch),
+    },
+    firstQuestionOptions,
+    questionCount: parsed.questions.length,
+    warningCodes: parsed.warnings.map((warning) => warning.code),
+    zeroQuestionReason: parsed.questions.length === 0
+      ? 'No question blocks survived marker/fallback parsing. Inspect formalQuestionTextPreview and matchedQuestionNumbers.'
+      : '',
+  }
 }
 
 const extractUploadedText = async (file) => {
@@ -1432,4 +1510,5 @@ router.patch('/skills/:id/deactivate', requireTeacherOrAdmin, updateSkillActiveS
 module.exports = router
 module.exports.__test = {
   parseImportText,
+  getParserDiagnostics,
 }

@@ -240,3 +240,15 @@ node scripts/smoke-import-parser.js
 ```
 
 验收：`questions.length >= 20`，1—20 均为 `CHOICE`，每题有题干和 A/B/C 三个选项；“英语参考答案”之后的题号只回填答案，不生成新题；只有 rawText 确实没有任何可识别题号时才允许 `RAW_TEXT_UNRECOGNIZED`。
+
+## 11. PDF parser 调试输出要求
+
+当 PDF `rawText` 非空但解析结果为 0 题时，解析器 smoke test 必须输出以下中间信息，避免只看到 `RAW_TEXT_UNRECOGNIZED`：
+
+- `formalQuestionTextFound` 与 `formalQuestionTextLength`：确认是否成功截取正式试题区。
+- `formalQuestionTextPreview`：展示正式试题区前 500 字，用于判断是否被“答案是 B”等例题文本提前截断。
+- `matchedQuestionNumbers`：至少验证 1、2、3 题号是否被题号正则识别。
+- `firstQuestionOptions`：验证第 1 题 A/B/C 选项是否进入 choice parser。
+- `questionCount`、`warningCodes`、`zeroQuestionReason`：定位最终 0 题原因。
+
+兜底规则：如果 section / material parser 失败，只要正式试题区存在 `数字 + ．/. / ) + 英文题干 + A. + B. + C.`，必须生成可人工校对的 `CHOICE` 草稿题；所有 parser 和 fallback 都失败时才允许 `RAW_TEXT_UNRECOGNIZED`。
