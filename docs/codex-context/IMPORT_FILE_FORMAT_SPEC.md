@@ -279,3 +279,11 @@ D. 8:30
 - 非标准 PDF rawText 会尝试从上下文识别 `listening`、`reading`、`cloze`、`fill_blank`、`translation`、`writing` 等 `typeHint`，并映射到当前 Prisma 已存在的安全题型。
 - 阅读理解和完形填空上下文中的长文本会被抽为 `ImportDraftMaterial`，题目通过 `metadata.materialLocalId` 关联；边界不确定时生成 `MATERIAL_GROUP_UNCERTAIN` warning。
 - 翻译、写作、语法/短文填空不再按完整选择题强制校验选项，答案区可回填 `referenceAnswer` 或 `explanation`，不确定时保留 warning 供人工校对。
+
+## 12. 通用文字型 PDF 解析规则补充
+
+- 解析器应先清洗 PDF 页眉页脚、页码、分页横线和多余空白，再进入 section、材料、题号、选项和答案识别。
+- section heading / 题型说明只用于判断题型、题号范围、分值和材料边界，不应写入题干、选项、答案或解析。
+- 五选四 / 七选五按“共享候选项题组”处理；完形填空按“每空独立选项题组”处理；语法填空 / 短文填空按 `metadata.typeHint = fill_blank` 保留真实题型。
+- 参考答案区只用于回填 answer / referenceAnswer，不参与题目生成；没有明确“解析：/答案解析：/解题思路：/原因：”时，explanation 应为空。
+- 写作题中的“80 词左右 / 100 词左右”等字数要求不得识别为题号。
