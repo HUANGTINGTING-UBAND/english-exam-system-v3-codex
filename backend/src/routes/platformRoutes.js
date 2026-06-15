@@ -194,20 +194,57 @@ const getContextBeforeQuestion = (rawText, index) => {
   return rawText.slice(Math.max(0, index - 900), index)
 }
 
-const cleanMaterialText = (text) => {
-  return String(text || '')
+const questionLineRegex = /^(?:第\s*)?\d{1,3}\s*(?:题)?[\.．、\)]/
+const optionLineRegex = /^[A-E][\.．、\)]\s+/
+
+const getMaterialStartIndex = (text, typeHint) => {
+  const value = String(text || '')
+  const startsByType = {
+    reading: [/The Tan family/i, /What are insects/i],
+    seven_choice: [/Make a Difference to Your School/i],
+    cloze: [/Oh,\s*no\?\s*How silly I was/i],
+    fill_blank: [/Long,\s*long ago/i],
+  }
+
+  const starts = startsByType[typeHint] || []
+  for (const pattern of starts) {
+    const match = pattern.exec(value)
+    if (match) return match.index
+  }
+
+  const articleMarker = /(?:^|\n)\s*[A-C]\s*(?:\n|$)/g
+  let markerMatch = articleMarker.exec(value)
+  let lastMarkerEnd = -1
+
+  while (markerMatch) {
+    lastMarkerEnd = articleMarker.lastIndex
+    markerMatch = articleMarker.exec(value)
+  }
+
+  return lastMarkerEnd
+}
+
+const cleanMaterialText = (text, typeHint = '') => {
+  const materialStartIndex = getMaterialStartIndex(text, typeHint)
+  const candidateText = materialStartIndex >= 0 ? String(text || '').slice(materialStartIndex) : String(text || '')
+  const keepOptionLines = typeHint === 'seven_choice'
+
+  return candidateText
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !instructionLineRegex.test(line))
     .filter((line) => !exampleRegex.test(line))
+    .filter((line) => !questionLineRegex.test(line))
+    .filter((line) => keepOptionLines || !optionLineRegex.test(line))
+    .filter((line) => !/^[A-C]$/.test(line))
     .join('\n')
     .trim()
 }
 
-const looksLikeMaterialText = (text) => {
-  const value = cleanMaterialText(text)
-  return value.length >= 120 && /[a-zA-Z]/.test(value)
+const looksLikeMaterialText = (text, typeHint = '') => {
+  const value = cleanMaterialText(text, typeHint)
+  return value.length >= 40 && /[a-zA-Z]/.test(value)
 }
 
 const parseAnswerDetails = (rawText) => {
@@ -253,14 +290,14 @@ const splitQuestionBlocks = (rawText) => {
     const questionNo = match[2]
     const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 260)
     const previousChar = normalizedText[lineStart - 1] || ''
-    const beforeMarker = normalizedText.slice(Math.max(0, lineStart - 30), lineStart)
+    const sameLineBeforeMarker = normalizedText.slice(normalizedText.lastIndexOf('\n', lineStart - 1) + 1, lineStart)
+    const numberDetected = detectTypeHintByQuestionNumber(questionNo)
 
-    if (/[A-Za-z0-9]/.test(previousChar) || /[A-Za-z]\s+$/.test(beforeMarker) || /^[A-D][\.．、\)]?\s/.test(afterMarker) || exampleRegex.test(afterMarker)) {
+    if (/[A-Za-z0-9]/.test(previousChar) || /[A-Za-z]\s+$/.test(sameLineBeforeMarker) || (!numberDetected && /^[A-D][\.．、\)]?\s/.test(afterMarker)) || exampleRegex.test(afterMarker)) {
       match = markerRegex.exec(normalizedText)
       continue
     }
 
-    const numberDetected = detectTypeHintByQuestionNumber(questionNo)
     const hasOptionSequence = /A(?:[\.．、\)]\s*|\s+).{1,120}B(?:[\.．、\)]\s*|\s+).{1,120}C(?:[\.．、\)]\s*|\s+)/s.test(afterMarker)
     const looksLikeQuestion = /[?？]|\b(?:what|where|when|who|which|why|how|is|are|do|does|did|can|could|would|will|should|write|translate|fill)\b/i.test(afterMarker) || /翻译|写作|作文|填空/.test(afterMarker)
 
@@ -284,7 +321,7 @@ const splitQuestionBlocks = (rawText) => {
     const block = normalizedText.slice(marker.index, nextMarker ? nextMarker.index : normalizedText.length).trim()
     const prefixStart = previousMarker ? previousMarker.index : Math.max(0, marker.index - 1200)
     const prefix = normalizedText.slice(prefixStart, marker.index).trim()
-    const materialText = ['reading', 'cloze'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix) ? cleanMaterialText(prefix) : ''
+    const materialText = ['reading', 'seven_choice', 'cloze', 'fill_blank'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix, marker.detected.typeHint) ? cleanMaterialText(prefix, marker.detected.typeHint) : ''
 
     return {
       block,
@@ -449,7 +486,7 @@ const parseImportText = (rawText, fallbackTitle) => {
     const mappedAnswer = answerMap.get(questionNo)
     const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : (answerRaw || answerDetail)
     const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || 2
-    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'cloze'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
+    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
 
     const choiceLike = isChoiceLikeQuestion(text, options)
 

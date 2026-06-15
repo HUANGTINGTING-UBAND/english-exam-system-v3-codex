@@ -252,3 +252,12 @@ node scripts/smoke-import-parser.js
 - `questionCount`、`warningCodes`、`zeroQuestionReason`：定位最终 0 题原因。
 
 兜底规则：如果 section / material parser 失败，只要正式试题区存在 `数字 + ．/. / ) + 英文题干 + A. + B. + C.`，必须生成可人工校对的 `CHOICE` 草稿题；所有 parser 和 fallback 都失败时才允许 `RAW_TEXT_UNRECOGNIZED`。
+
+## 12. 材料边界 smoke 用例
+
+真实 PDF rawText 中，阅读/七选五/完形/语法填空材料不能从上一题题干或选项开始。`backend/scripts/smoke-import-parser.js` 增加了材料边界断言：
+
+- B 篇阅读材料必须包含 `The Tan family`，且不能包含 `23．Where can we read...`。
+- C 篇阅读材料必须包含 `What are insects`，且不能包含 `27．What is the writer’s main purpose...`。
+- 完形材料必须包含 `Oh, no? How silly I was`，且不能包含七选五标题或 A-E 候选项。
+- 语法填空材料必须包含 `Long, long ago`，类型不能保存为 `CLOZE_TEXT`，关联题目应记录 `metadata.typeHint: fill_blank`。
