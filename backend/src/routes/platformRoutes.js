@@ -213,7 +213,13 @@ const splitQuestionBlocks = (rawText) => {
     return rawText.split(/\[QUESTION\]/i).slice(1).map((block) => ({ block, materialText: '', typeHint: 'choice' }))
   }
 
-  const normalizedText = normalizeImportRawText(rawText)
+  let normalizedText = normalizeImportRawText(rawText)
+  const answerSectionIndex = normalizedText.search(/答案与解析|参考答案|答案|解析/)
+
+  if (answerSectionIndex >= 0) {
+    normalizedText = normalizedText.slice(0, answerSectionIndex)
+  }
+
   const markerRegex = /(^|\n)\s*(?:第\s*)?(\d{1,3})\s*(?:题)?[\.．、\)]?\s*/g
   const markers = []
   let match = markerRegex.exec(normalizedText)
