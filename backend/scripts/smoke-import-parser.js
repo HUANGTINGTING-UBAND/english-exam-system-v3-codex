@@ -340,7 +340,7 @@ if (fullPaperParsed.questions.length !== 61) {
   throw new Error(`Expected full paper to keep exactly 61 questions, got ${fullPaperParsed.questions.length}`)
 }
 
-for (const requiredNo of ['1', '20', '21', '31', '32', '35', '36', '45', '46', '55', '56', '60', '61']) {
+for (const requiredNo of ['1', '20', '21', '31', '32', '35', '36', '45', '46', '47', '55', '56', '60', '61']) {
   if (!fullQuestionNumbers.has(requiredNo)) {
     throw new Error(`Expected full paper to include question ${requiredNo}`)
   }
@@ -460,6 +460,13 @@ const question46ForClozeBinding = fullPaperParsed.questions.find((item) => item.
 if (question46ForClozeBinding?.metadata?.materialLocalId?.startsWith('cloze-')) {
   throw new Error('Expected question 46 not to bind to cloze material')
 }
+const clozeMaterialId = fullMaterialsByContent.cloze.localId
+const clozeBoundQuestionNumbers = fullPaperParsed.questions
+  .filter((question) => question.metadata?.materialLocalId === clozeMaterialId)
+  .map((question) => Number(question.metadata?.questionNo))
+if (JSON.stringify(clozeBoundQuestionNumbers) !== JSON.stringify(Array.from({ length: 10 }, (_, index) => 36 + index))) {
+  throw new Error(`Expected ${clozeMaterialId} to bind strictly to 36-45, got ${clozeBoundQuestionNumbers.join(', ')}`)
+}
 
 
 if (!fullMaterialsByContent.fill || fullMaterialsByContent.fill.type === 'CLOZE_TEXT' || !fullMaterialsByContent.fill.content.includes('Long, long ago') || fullMaterialsByContent.fill.content.includes('第四部分 综合技能') || fullMaterialsByContent.fill.content.includes('阅读下面短文，根据短文内容回答问题')) {
@@ -490,6 +497,22 @@ for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
   if (Array.isArray(question?.options) && question.options.length > 0) {
     throw new Error(`Expected fill_blank question ${n} to have no choice options`)
   }
+}
+
+const missing47RawText = `第三部分 语言运用
+第二节 阅读下面短文，在空白处填入 1 个适当的单词或括号内单词的正确形式。
+Long, long ago, there was a city called Jijiaocheng. 46．The city provided water and people learned 48．to cut stones.
+49．workers 50．their 51．really 52．and 53．traditional 54．on 55．shows
+英语参考答案
+46．The 47．provided 48．to cut 49．workers 50．their 51．really 52．and 53．traditional 54．on 55．shows`
+const missing47Parsed = __test.parseImportText(missing47RawText, 'missing 47 fill_blank smoke')
+const missing47Numbers = missing47Parsed.questions.map((question) => question.metadata?.questionNo)
+if (!missing47Numbers.includes('47')) {
+  throw new Error('Expected fill_blank fallback to synthesize missing question 47 from fill_blank section/answer signals')
+}
+const missing47Question = missing47Parsed.questions.find((question) => question.metadata?.questionNo === '47')
+if (missing47Question?.metadata?.typeHint !== 'fill_blank' || !missing47Question?.metadata?.materialLocalId?.startsWith('fill_blank-')) {
+  throw new Error('Expected synthesized question 47 to stay in fill_blank group')
 }
 
 if (!fullMaterialsByContent.subjective) {

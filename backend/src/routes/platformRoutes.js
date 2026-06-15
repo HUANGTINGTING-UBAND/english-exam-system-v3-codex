@@ -652,6 +652,31 @@ const normalizeParsedMaterials = (materials) => {
 }
 
 
+const ensureFillBlankMaterialForRange = (questions, materials, warnings, hasFillBlankSignals) => {
+  if (!hasFillBlankSignals || materials.some((material) => String(material.localId || '').startsWith('fill_blank-'))) {
+    return
+  }
+
+  const hasFillBlankQuestions = questions.some((question) => {
+    const questionNo = Number(question.metadata?.questionNo)
+    return questionNo >= 46 && questionNo <= 55
+  })
+
+  if (!hasFillBlankQuestions) {
+    return
+  }
+
+  const material = {
+    localId: `fill_blank-${materials.length + 1}`,
+    type: 'TEXT',
+    title: '语法填空 / 短文填空材料（需人工校对）',
+    content: 'PDF 文本未稳定识别出语法填空 / 短文填空材料边界，请人工查看原文并补充材料。',
+    orderIndex: materials.length + 1,
+  }
+  materials.push(material)
+  warnings.push({ level: 'WARNING', code: 'MATERIAL_GROUP_UNCERTAIN', message: '已识别 46—55 填空题，但材料边界不稳定，已生成 fill_blank 占位材料供人工校对。', targetType: 'MATERIAL' })
+}
+
 const rebalanceFullPaperMaterialBindings = (questions, materials) => {
   const firstMaterialId = (prefix, offset = 0) => materials.filter((material) => String(material.localId || '').startsWith(prefix))[offset]?.localId || null
   const readingIds = materials.filter((material) => String(material.localId || '').startsWith('reading-')).map((material) => material.localId)
@@ -1047,11 +1072,14 @@ ${block}`, inferredType.typeHint === 'five_choose_four' ? 5 : 7)
   })
 
   const formalQuestionText = rawText.includes('[QUESTION]') ? rawText : extractFormalQuestionText(rawText)
+  const hasFillBlankSignals = /(?:语法填空|短文填空|用所给词适当形式填空|在空白处填入)/.test(formalQuestionText)
+    || Array.from({ length: 10 }, (_, index) => String(46 + index)).some((numberText) => answerDetailMap.has(numberText) || new RegExp(`(^|\\n|\\s)(?:第\\s*)?${numberText}\\s*(?:题)?(?:[\\.．、\\)]\\s*|\\s+)`).test(formalQuestionText))
   for (let questionNumber = 1; questionNumber <= 61; questionNumber += 1) {
     const questionNo = String(questionNumber)
     const hasFormalMarker = new RegExp(`(^|\\n|\\s)(?:第\\s*)?${questionNo}\\s*(?:题)?(?:[\\.．、\\)]\\s*|\\s+)`).test(formalQuestionText)
+    const shouldSynthesizeFillBlank = questionNumber >= 46 && questionNumber <= 55 && hasFillBlankSignals
 
-    if (!hasFormalMarker || seenQuestionNumbers.has(questionNo)) {
+    if ((!hasFormalMarker && !shouldSynthesizeFillBlank) || seenQuestionNumbers.has(questionNo)) {
       continue
     }
 
@@ -1079,6 +1107,7 @@ ${block}`, inferredType.typeHint === 'five_choose_four' ? 5 : 7)
     warnings.push({ level: 'WARNING', code: 'QUESTION_SYNTHESIZED_FROM_NUMBER', message: `第 ${questionNo} 题只识别到题号，已生成安全草稿题，请人工补全题干/答案。`, targetType: 'QUESTION' })
   }
 
+  ensureFillBlankMaterialForRange(questions, materials, warnings, hasFillBlankSignals)
   questions.sort((a, b) => Number(a.metadata?.questionNo || a.orderIndex) - Number(b.metadata?.questionNo || b.orderIndex))
   normalizeParsedMaterials(materials)
   rebalanceFullPaperMaterialBindings(questions, materials)
