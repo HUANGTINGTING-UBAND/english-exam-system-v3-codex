@@ -70,6 +70,92 @@ const parseExamMeta = (rawText, fallbackTitle) => {
   }
 }
 
+const getQuestionNumberFromBlock = (block, fallbackIndex) => {
+  const match = block.match(/题号[:：]\s*(\d+)/) || block.match(/^\s*(?:第\s*)?(\d{1,3})\s*(?:题)?[\.．、\)]?/m)
+  return (match?.[1] || String(fallbackIndex + 1)).trim()
+}
+
+const stripQuestionNumberPrefix = (block) => {
+  return block
+    .replace(/^\s*题号[:：]\s*\d+\s*/m, '')
+    .replace(/^\s*(?:第\s*)?\d{1,3}\s*(?:题)?[\.．、\)]?\s*/m, '')
+    .trim()
+}
+
+const optionMarkerPattern = '[A-D](?:[\\.．、\\)]\\s*|\\s+)'
+const firstOptionRegex = new RegExp(`(?:^|\\s)${optionMarkerPattern}`, 'm')
+
+const splitQuestionBlocks = (rawText) => {
+  if (rawText.includes('[QUESTION]')) {
+    return rawText.split(/\[QUESTION\]/i).slice(1)
+  }
+
+  const normalizedText = rawText.replace(/\r\n/g, '\n')
+  const markerRegex = /(^|\n)\s*(?:第\s*)?(\d{1,3})\s*(?:题)?[\.．、\)]?\s*/g
+  const markers = []
+  let match = markerRegex.exec(normalizedText)
+
+  while (match) {
+    const lineStart = match.index + match[1].length
+    const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 180)
+
+    if (/^[A-D][\.．、\)]?\s/.test(afterMarker)) {
+      match = markerRegex.exec(normalizedText)
+      continue
+    }
+
+    if (/[?？]|\b(?:what|where|when|who|which|why|how|is|are|do|does|did|can|could|would|will|should)\b/i.test(afterMarker)) {
+      markers.push({ index: lineStart })
+    }
+
+    match = markerRegex.exec(normalizedText)
+  }
+
+  return markers.map((marker, index) => {
+    const nextMarker = markers[index + 1]
+    return normalizedText.slice(marker.index, nextMarker ? nextMarker.index : normalizedText.length).trim()
+  })
+}
+
+const parseInlineOptions = (block) => {
+  const optionStart = block.search(firstOptionRegex)
+
+  if (optionStart < 0) {
+    return []
+  }
+
+  const optionText = block.slice(optionStart).replace(/\s+/g, ' ').trim()
+  const options = []
+  const optionRegex = /(?:^|\s)([A-D])(?:[\.．、\)]\s*|\s+)([\s\S]*?)(?=\s+[A-D](?:[\.．、\)]\s*|\s+)|$)/g
+  let match = optionRegex.exec(optionText)
+
+  while (match) {
+    const value = String(match[2] || '').trim()
+
+    if (value) {
+      options.push(value)
+    }
+
+    match = optionRegex.exec(optionText)
+  }
+
+  return options
+}
+
+const parseQuestionText = (block) => {
+  const labeledTextMatch = block.match(/题干[:：]\s*([\s\S]*?)(?=\n\s*(?:选项[:：]|A[\.．、\)]?|答案[:：]|解析[:：]|知识点[:：]|分值[:：]|材料ID[:：]|$))/)
+
+  if (labeledTextMatch) {
+    return labeledTextMatch[1].trim()
+  }
+
+  const withoutNumber = stripQuestionNumberPrefix(block)
+  const optionStart = withoutNumber.search(firstOptionRegex)
+  const text = optionStart >= 0 ? withoutNumber.slice(0, optionStart) : withoutNumber
+
+  return text.replace(/\s+/g, ' ').trim()
+}
+
 const parseImportText = (rawText, fallbackTitle) => {
   const warnings = []
   const examMeta = parseExamMeta(rawText, fallbackTitle)
@@ -93,27 +179,32 @@ const parseImportText = (rawText, fallbackTitle) => {
     if (!material.content) warnings.push({ level: 'WARNING', code: 'EMPTY_MATERIAL', message: `材料 ${id} 未解析到正文，请人工补充。`, targetType: 'MATERIAL' })
   })
 
-  const questionBlocks = rawText.includes('[QUESTION]')
-    ? rawText.split(/\[QUESTION\]/i).slice(1)
-    : rawText.split(/(?=^\s*题号[:：]|^\s*\d+[\.、]\s+)/m).filter((block) => /(?:题号[:：]|^\s*\d+[\.、])/m.test(block))
+  const questionBlocks = splitQuestionBlocks(rawText)
 
   const questions = questionBlocks.map((block, index) => {
-    const questionNo = (block.match(/题号[:：]\s*(\d+)/)?.[1] || block.match(/^\s*(\d+)[\.、]/m)?.[1] || String(index + 1)).trim()
-    const type = normalizeDraftQuestionType(block.match(/题型[:：]\s*(.+)/)?.[1], warnings, `第 ${questionNo} 题`)
-    const textMatch = block.match(/题干[:：]\s*([\s\S]*?)(?=\n\s*(?:选项[:：]|A[\.、]|答案[:：]|解析[:：]|知识点[:：]|分值[:：]|材料ID[:：]|$))/)
-    let text = textMatch ? textMatch[1].trim() : block.replace(/^\s*\d+[\.、]\s*/, '').split(/\n\s*A[\.、]/)[0].trim()
-    if (!text || /^题号[:：]/.test(text)) {
-      text = ''
+    const questionNo = getQuestionNumberFromBlock(block, index)
+    const hasExplicitType = Boolean(block.match(/题型[:：]\s*(.+)/)?.[1])
+    const type = hasExplicitType ? normalizeDraftQuestionType(block.match(/题型[:：]\s*(.+)/)?.[1], warnings, `第 ${questionNo} 题`) : 'CHOICE'
+    const text = parseQuestionText(block)
+
+    if (!text) {
       warnings.push({ level: 'WARNING', code: 'MISSING_QUESTION_TEXT', message: `第 ${questionNo} 题题干未明确解析，请人工补充。`, targetType: 'QUESTION' })
     }
-    const options = ['A', 'B', 'C', 'D'].map((letter) => block.match(new RegExp(`^\\s*${letter}[\\.、]\\s*(.+)`, 'm'))?.[1]?.trim()).filter(Boolean)
+
+    const labeledOptions = ['A', 'B', 'C', 'D']
+      .map((letter) => block.match(new RegExp(`(?:^|\\n|\\s)${letter}(?:[\\.．、\\)]\\s*|\\s+)([^A-D\\n]+)`, 'm'))?.[1]?.trim())
+      .filter(Boolean)
+    const inlineOptions = parseInlineOptions(block)
+    const options = inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions
     const answerRaw = block.match(/(?:答案|参考答案)[:：]\s*(.+)/)?.[1]?.trim() || ''
     const answer = type === 'CHOICE' ? (answerLetterMap[answerRaw.toUpperCase()] ?? null) : answerRaw
     const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || 2
     const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || null
-    if (type === 'CHOICE' && options.length < 2) warnings.push({ level: 'WARNING', code: 'CHOICE_OPTIONS_INCOMPLETE', message: `第 ${questionNo} 题选项不足，请人工校对。`, targetType: 'QUESTION' })
+
+    if (type === 'CHOICE' && options.length < 3) warnings.push({ level: 'WARNING', code: 'CHOICE_OPTIONS_INCOMPLETE', message: `第 ${questionNo} 题选项少于 3 个，请人工校对。`, targetType: 'QUESTION' })
     if (type === 'CHOICE' && answer === null) warnings.push({ level: 'WARNING', code: 'MISSING_CHOICE_ANSWER', message: `第 ${questionNo} 题没有可用客观题答案，请人工补充。`, targetType: 'QUESTION' })
     if (materialLocalId && !materialIdMap.has(materialLocalId)) warnings.push({ level: 'WARNING', code: 'MATERIAL_BINDING_UNCERTAIN', message: `第 ${questionNo} 题引用的材料 ${materialLocalId} 未找到，入库前请确认。`, targetType: 'QUESTION' })
+
     return {
       type, text: text || '待校对题目', options: options.length ? options : null, answer, score,
       knowledgePoint: block.match(/知识点[:：]\s*(.+)/)?.[1]?.trim() || '未分类',
@@ -123,7 +214,15 @@ const parseImportText = (rawText, fallbackTitle) => {
       metadata: { questionNo, materialLocalId },
     }
   })
-  if (questions.length === 0) warnings.push({ level: 'WARNING', code: 'NO_QUESTIONS_PARSED', message: '未解析到题目，请人工检查原始文本。' })
+
+  if (questions.length === 0) {
+    warnings.push({
+      level: 'WARNING',
+      code: rawText.trim() ? 'RAW_TEXT_UNRECOGNIZED' : 'NO_QUESTIONS_PARSED',
+      message: rawText.trim() ? '已提取文本但题目格式未识别，请人工编辑 rawText 后重新解析。' : '未解析到题目，请人工检查原始文本。',
+    })
+  }
+
   return { examMeta, materials, questions, warnings }
 }
 
@@ -664,7 +763,7 @@ router.post('/import/jobs', requireTeacherOrAdmin, upload.single('file'), async 
         gradeLevel: validGradeLevel(parsed.examMeta.gradeLevel),
         title: parsed.examMeta.title,
         rawText: String(rawText),
-        status: parsed.questions.length > 0 ? 'NEEDS_REVIEW' : 'FAILED',
+        status: String(rawText).trim() ? 'NEEDS_REVIEW' : 'FAILED',
         sourceType: req.file ? 'FILE_UPLOAD' : 'PASTED_TEXT',
         metadata: {
           examMeta: parsed.examMeta,
@@ -794,6 +893,105 @@ router.get('/import/jobs/:id', requireTeacherOrAdmin, async (req, res) => {
       message: '导入草稿详情获取失败',
       error: error.message,
     })
+  }
+})
+
+
+const replaceImportJobDraftFromRawText = async (job, rawText) => {
+  const parsed = parseImportText(String(rawText || ''), job.title)
+
+  return prisma.$transaction(async (tx) => {
+    await tx.importDraftQuestion.deleteMany({ where: { importJobId: job.id } })
+    await tx.importDraftMaterial.deleteMany({ where: { importJobId: job.id } })
+    await tx.importWarning.deleteMany({ where: { importJobId: job.id } })
+
+    await tx.importJob.update({
+      where: { id: job.id },
+      data: {
+        rawText: String(rawText || ''),
+        gradeLevel: validGradeLevel(parsed.examMeta.gradeLevel),
+        status: String(rawText || '').trim() ? 'NEEDS_REVIEW' : 'FAILED',
+        metadata: {
+          ...(job.metadata || {}),
+          examMeta: parsed.examMeta,
+          reparsedAt: new Date().toISOString(),
+        },
+      },
+    })
+
+    for (const material of parsed.materials) {
+      await tx.importDraftMaterial.create({
+        data: {
+          importJobId: job.id,
+          type: material.type,
+          title: material.title,
+          content: material.content,
+          orderIndex: material.orderIndex,
+          metadata: { localId: material.localId },
+        },
+      })
+    }
+
+    for (const question of parsed.questions) {
+      await tx.importDraftQuestion.create({
+        data: {
+          importJobId: job.id,
+          type: question.type,
+          text: question.text,
+          options: question.options,
+          answer: question.answer === undefined ? null : question.answer,
+          score: question.score,
+          knowledgePoint: question.knowledgePoint,
+          referenceAnswer: question.referenceAnswer,
+          explanation: question.explanation,
+          orderIndex: question.orderIndex,
+          metadata: question.metadata,
+        },
+      })
+    }
+
+    for (const warning of parsed.warnings) {
+      await tx.importWarning.create({
+        data: {
+          importJobId: job.id,
+          level: warning.level || 'WARNING',
+          code: warning.code || null,
+          field: warning.field || null,
+          message: warning.message || '导入草稿需要人工校对',
+          targetType: warning.targetType || null,
+          targetId: warning.targetId || null,
+        },
+      })
+    }
+
+    return tx.importJob.findUnique({
+      where: { id: job.id },
+      include: {
+        questions: { orderBy: { orderIndex: 'asc' } },
+        materials: { orderBy: { orderIndex: 'asc' } },
+        warnings: true,
+      },
+    })
+  })
+}
+
+router.post('/import/jobs/:id/reparse', requireTeacherOrAdmin, async (req, res) => {
+  try {
+    const where = req.user.role === 'ADMIN'
+      ? { id: req.params.id }
+      : { id: req.params.id, creatorId: req.user.id }
+    const job = await prisma.importJob.findFirst({ where })
+
+    if (!job) {
+      return res.status(404).json({ message: '导入草稿不存在或无权访问' })
+    }
+
+    const reparsedJob = await replaceImportJobDraftFromRawText(job, req.body.rawText ?? job.rawText ?? '')
+
+    res.json({ message: 'rawText 重新解析成功', data: reparsedJob })
+  } catch (error) {
+    console.error('Reparse import job error:', error)
+    res.status(500).json({ message: 'rawText 重新解析失败', error: error.message })
   }
 })
 

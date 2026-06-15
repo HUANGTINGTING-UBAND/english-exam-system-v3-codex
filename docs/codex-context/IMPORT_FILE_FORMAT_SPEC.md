@@ -259,3 +259,10 @@ D. 8:30
 - 解析器会尝试识别试卷标题、考试类型、总分、时长、`[MATERIAL]`、`[QUESTION]`、题号、题型、题干、A/B/C/D 选项、答案、解析、知识点、分值、材料ID。
 - 无法判断题型时默认 `CHOICE`，并生成 `UNKNOWN_QUESTION_TYPE` warning；选择题缺少答案、选项不足、材料绑定不确定等均生成 warning。
 - `POST /api/import/jobs/:id/confirm` 是唯一从草稿进入正式试卷的入口。
+
+## 9. 本轮 PDF 中考试卷兼容增强
+
+- 基础解析器增加真实中考试卷 PDF 文本兼容：题号支持 `1.`、`1．`、`1、`、`1)`、`第 1 题`，题号后可无空格。
+- 选择题选项支持 `A.`、`A．`、`A、`、`A)`，并允许 A/B/C/D 或 A/B/C 在同一行排列。
+- 听力选择题允许只有 A/B/C 三个选项；少于 3 个选项才生成选项不完整 warning。
+- 已提取 rawText 但未识别题目时，导入任务保持 `NEEDS_REVIEW`，生成 `RAW_TEXT_UNRECOGNIZED` warning，便于人工编辑 rawText 后重新解析。

@@ -5,6 +5,7 @@ import {
   createImportJob,
   getImportJob,
   getImportJobs,
+  reparseImportJob,
   resolveImportWarning,
   updateImportDraftMaterial,
   updateImportDraftQuestion,
@@ -84,6 +85,18 @@ const markWarningResolved = async (warning) => {
   await refreshSelectedJob()
 }
 
+const handleReparse = async () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    selectedJob.value = prepareJobForEdit(await reparseImportJob(selectedJob.value.id, selectedJob.value.rawText || ''))
+    successMessage.value = 'rawText 已重新解析，请继续校对草稿题目、材料和 warning。'
+    await loadJobs()
+  } catch (error) {
+    errorMessage.value = error.message || '重新解析 rawText 失败'
+  }
+}
+
 const handleConfirm = async () => {
   const confirmed = window.confirm('确认将当前草稿生成正式试卷？生成后将出现在试卷列表或管理页面中。')
   if (!confirmed) return
@@ -143,6 +156,11 @@ onMounted(() => {
 
     <section v-if="selectedJob" class="admin-section-card">
       <div class="section-header-row"><h2>草稿详情：{{ selectedJob.title }}</h2><button class="primary-btn" @click="handleConfirm">确认入库</button></div>
+      <p class="question-meta"><span>rawText 长度：{{ (selectedJob.rawText || '').length }} 字符</span><span>当前草稿题目：{{ selectedJob.questions?.length || 0 }} 题</span></p>
+
+      <h3>原始文本与重新解析</h3>
+      <label>rawText（可编辑后重新解析）<textarea v-model="selectedJob.rawText" rows="8"></textarea></label>
+      <button class="secondary-btn" @click="handleReparse">重新解析 rawText</button>
 
       <h3>Warnings</h3>
       <ul class="simple-list"><li v-for="warning in selectedJob.warnings" :key="warning.id">[{{ warning.level }}] {{ warning.code }} - {{ warning.message }} <span v-if="warning.isResolved">（已处理）</span><button v-else class="secondary-btn" @click="markWarningResolved(warning)">标记已处理</button></li></ul>
@@ -153,7 +171,6 @@ onMounted(() => {
       <h3>草稿题目</h3>
       <div v-for="question in selectedJob.questions" :key="question.id" class="admin-form-card"><label>题型<select v-model="question.type"><option>CHOICE</option><option>READING</option><option>CLOZE</option><option>TRANSLATION</option><option>WRITING</option><option>ERROR_CORRECTION</option></select></label><label>题干<textarea v-model="question.text" rows="3"></textarea></label><label>选项（每行一个）<textarea v-model="question.optionsText" rows="4"></textarea></label><label>答案（选择题填 0/1/2/3）<input v-model="question.answerText" /></label><label>解析<textarea v-model="question.explanation" rows="2"></textarea></label><label>知识点<input v-model="question.knowledgePoint" /></label><label>分值<input v-model.number="question.score" type="number" min="0" /></label><label>材料ID<input v-model="question.materialLocalId" placeholder="如 reading-001" /></label><button class="secondary-btn" @click="saveQuestion(question)">保存题目</button></div>
 
-      <h3>原始文本预览</h3><pre>{{ selectedJob.rawText || '暂无原始文本' }}</pre>
     </section>
   </div>
 </template>

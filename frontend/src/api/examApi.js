@@ -459,6 +459,20 @@ export const getImportJob = async (jobId) => {
   return parseResponse(response, '获取导入草稿详情失败')
 }
 
+
+export const reparseImportJob = async (jobId, rawText) => {
+  const response = await fetch(`${API_BASE_URL}/import/jobs/${jobId}/reparse`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ rawText }),
+  })
+
+  return parseResponse(response, '重新解析 rawText 失败')
+}
+
 export const createSkill = async (skillData) => {
   const response = await fetch(`${API_BASE_URL}/skills`, {
     method: 'POST',
