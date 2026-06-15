@@ -161,6 +161,20 @@ const detectTypeHintFromContext = (text) => {
   return { type: 'CHOICE', typeHint: 'choice' }
 }
 
+const detectTypeHintByQuestionNumber = (questionNo) => {
+  const numberValue = Number(questionNo)
+
+  if (numberValue >= 1 && numberValue <= 20) return { type: 'CHOICE', typeHint: 'listening' }
+  if (numberValue >= 21 && numberValue <= 31) return { type: 'CHOICE', typeHint: 'reading' }
+  if (numberValue >= 32 && numberValue <= 35) return { type: 'CLOZE', typeHint: 'seven_choice' }
+  if (numberValue >= 36 && numberValue <= 45) return { type: 'CLOZE', typeHint: 'cloze' }
+  if (numberValue >= 46 && numberValue <= 55) return { type: 'CLOZE', typeHint: 'fill_blank' }
+  if (numberValue >= 56 && numberValue <= 60) return { type: 'TRANSLATION', typeHint: 'translation' }
+  if (numberValue === 61) return { type: 'WRITING', typeHint: 'writing' }
+
+  return null
+}
+
 const getContextBeforeQuestion = (rawText, index) => {
   return rawText.slice(Math.max(0, index - 900), index)
 }
@@ -220,22 +234,30 @@ const splitQuestionBlocks = (rawText) => {
     normalizedText = normalizedText.slice(0, answerSectionIndex)
   }
 
-  const markerRegex = /(^|\n)\s*(?:第\s*)?(\d{1,3})\s*(?:题)?[\.．、\)]?\s*/g
+  const markerRegex = /(^|\n|\s)(?:第\s*)?(\d{1,3})\s*(?:题)?(?:[\.．、\)]\s*|\s+)/g
   const markers = []
   let match = markerRegex.exec(normalizedText)
 
   while (match) {
     const lineStart = match.index + match[1].length
-    const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 220)
+    const questionNo = match[2]
+    const afterMarker = normalizedText.slice(markerRegex.lastIndex, markerRegex.lastIndex + 260)
+    const previousChar = normalizedText[lineStart - 1] || ''
+    const beforeMarker = normalizedText.slice(Math.max(0, lineStart - 30), lineStart)
 
-    if (/^[A-D][\.．、\)]?\s/.test(afterMarker) || exampleRegex.test(afterMarker)) {
+    if (/[A-Za-z0-9]/.test(previousChar) || /[A-Za-z]\s+$/.test(beforeMarker) || /^[A-D][\.．、\)]?\s/.test(afterMarker) || exampleRegex.test(afterMarker)) {
       match = markerRegex.exec(normalizedText)
       continue
     }
 
-    if (/[?？]|\b(?:what|where|when|who|which|why|how|is|are|do|does|did|can|could|would|will|should|write|translate|fill)\b/i.test(afterMarker) || /翻译|写作|作文|填空/.test(afterMarker)) {
+    const numberDetected = detectTypeHintByQuestionNumber(questionNo)
+    const hasOptionSequence = /A(?:[\.．、\)]\s*|\s+).{1,120}B(?:[\.．、\)]\s*|\s+).{1,120}C(?:[\.．、\)]\s*|\s+)/s.test(afterMarker)
+    const looksLikeQuestion = /[?？]|\b(?:what|where|when|who|which|why|how|is|are|do|does|did|can|could|would|will|should|write|translate|fill)\b/i.test(afterMarker) || /翻译|写作|作文|填空/.test(afterMarker)
+
+    if (numberDetected || hasOptionSequence || looksLikeQuestion) {
       const context = getContextBeforeQuestion(normalizedText, lineStart)
-      const detected = detectTypeHintFromContext(context)
+      const contextDetected = detectTypeHintFromContext(context)
+      const detected = numberDetected || contextDetected
       markers.push({ index: lineStart, context, detected })
     }
 
@@ -1408,3 +1430,6 @@ router.patch('/skills/:id/activate', requireTeacherOrAdmin, updateSkillActiveSta
 router.patch('/skills/:id/deactivate', requireTeacherOrAdmin, updateSkillActiveStatus(false))
 
 module.exports = router
+module.exports.__test = {
+  parseImportText,
+}

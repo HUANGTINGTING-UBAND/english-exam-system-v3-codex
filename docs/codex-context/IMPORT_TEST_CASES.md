@@ -212,3 +212,31 @@ A. To the hospital.  B. To the library.  C. To the hotel.
 - 完形填空短文应只生成一个草稿材料，空号题记录 `typeHint: cloze`。
 - 翻译题、写作题、填空题应记录真实 `typeHint`，不得作为普通选择题强制要求 A/B/C 选项。
 - 答案与解析区能匹配题号时应回填选择题 answer 或主观题参考答案；无法稳定匹配时应保留 warning。
+
+## 10. PDF rawText 解析回归 smoke 用例
+
+真实中考试卷 PDF 文本抽取后，解析器必须先截断“英语参考答案 / 参考答案 / 答案与解析”之后的内容，答案区只能用于回填 `answer` / `explanation`，不得生成新草稿题。以下片段是 0 题回退的最小回归样例：
+
+```text
+第一部分 听力理解
+1．What is Bill’s favorite subject?
+A. Music. B. History. C. English.
+2．Where is the man going?
+A. To the hospital. B. To the library. C. To the hotel.
+...
+20．What’s the speaker’s purpose?
+A. To give advice. B. To ask for help. C. To send wishes
+英语参考答案
+1．B 2．A 3．C 4．A 5．C
+6．B 7．A 8．A 9．C 10．C
+```
+
+自动化 smoke 命令：
+
+```bash
+cd backend
+DATABASE_URL='postgresql://user:pass@localhost:5432/db' npx prisma generate
+node scripts/smoke-import-parser.js
+```
+
+验收：`questions.length >= 20`，1—20 均为 `CHOICE`，每题有题干和 A/B/C 三个选项；“英语参考答案”之后的题号只回填答案，不生成新题；只有 rawText 确实没有任何可识别题号时才允许 `RAW_TEXT_UNRECOGNIZED`。
