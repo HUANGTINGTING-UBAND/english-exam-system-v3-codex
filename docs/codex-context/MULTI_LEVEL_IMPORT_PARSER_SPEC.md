@@ -53,7 +53,7 @@
 | `fill_blank` / `grammar_fill` / `short_blank` | 语法填空 / 短文填空 | `ERROR_CORRECTION` 兼容 | 是 | 无选项 |
 | `error_correction` | 短文改错 | `ERROR_CORRECTION` | 是 | 无选项 |
 | `matching` | 长篇匹配 / 段落匹配 / 信息匹配 | `READING` 兼容 | 是 | 共享匹配项 |
-| `reading_answer` / `short_answer` / `subjective` | 回答问题 / 任务型阅读 | `TRANSLATION` 或 `READING` 兼容 | 是 | 无选项 |
+| `reading_answer` / `short_answer` / `subjective` | 回答问题 / 任务型阅读 | `READING` 兼容，确认为翻译题时才使用 `TRANSLATION` | 是 | 无选项 |
 | `copy_sentence` | 正确抄写句子 | `WRITING` 兼容 | 可无材料 | 无选项 |
 | `odd_one_out` | 找出不同类单词 | `CHOICE` | 可无材料 | 逐题独立选项 |
 | `word_box_fill` | 方框选词 | `ERROR_CORRECTION` 兼容 | 是 | 共享词库 |

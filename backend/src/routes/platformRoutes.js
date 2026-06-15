@@ -156,7 +156,7 @@ const questionTypeRuleRegistry = [
   },
   {
     typeHint: 'reading_answer',
-    compatibleType: 'TRANSLATION',
+    compatibleType: 'READING',
     keywords: ['回答问题', '任务型阅读', '根据短文内容回答问题'],
     hasMaterial: true,
     optionMode: 'none',
@@ -355,7 +355,6 @@ const isChoiceLikeQuestion = (text, options) => {
 const legacyParserTypeHintMap = {
   listening_choice: 'listening',
   reading_choice: 'reading',
-  five_choose_four: 'seven_choice',
   seven_choose_five: 'seven_choice',
   reading_answer: 'subjective',
   short_answer: 'subjective',
@@ -380,10 +379,10 @@ const detectTypeHintByQuestionNumber = (questionNo) => {
 
   if (numberValue >= 1 && numberValue <= 20) return { type: 'CHOICE', typeHint: 'listening' }
   if (numberValue >= 21 && numberValue <= 31) return { type: 'CHOICE', typeHint: 'reading' }
-  if (numberValue >= 32 && numberValue <= 35) return { type: 'CHOICE', typeHint: 'seven_choice' }
+  if (numberValue >= 32 && numberValue <= 35) return { type: 'CHOICE', typeHint: 'five_choose_four', displayType: 'five_choose_four' }
   if (numberValue >= 36 && numberValue <= 45) return { type: 'CLOZE', typeHint: 'cloze' }
   if (numberValue >= 46 && numberValue <= 55) return { type: 'ERROR_CORRECTION', typeHint: 'fill_blank' }
-  if (numberValue >= 56 && numberValue <= 59) return { type: 'TRANSLATION', typeHint: 'subjective' }
+  if (numberValue >= 56 && numberValue <= 59) return { type: 'READING', typeHint: 'subjective', displayType: 'reading_answer' }
   if (numberValue === 60) return { type: 'TRANSLATION', typeHint: 'translation' }
   if (numberValue === 61) return { type: 'WRITING', typeHint: 'writing' }
 
@@ -417,7 +416,8 @@ const getMaterialStartIndex = (text, typeHint) => {
     return lastMarkerEnd
   }
 
-  if (typeHint === 'seven_choice') return markerEnd(/(?:五选四|七选五|选句还原|短文还原)\s*(?:\n|$)/i)
+  if (typeHint === 'seven_choice') return markerEnd(/(?:七选五)\s*(?:\n|$)/i)
+  if (typeHint === 'five_choose_four') return markerEnd(/(?:五选四|七选五|选句还原|短文还原)\s*(?:\n|$)/i)
   if (typeHint === 'cloze') return markerEnd(/(?:完形填空)\s*(?:\n|$)/i)
   if (typeHint === 'fill_blank') return markerEnd(/(?:语法填空|短文填空|用所给词适当形式填空|在空白处填入[^\n]*)\s*(?:\n|$)/i)
   if (typeHint === 'subjective') return markerEnd(/(?:综合技能|任务型阅读|回答问题|根据短文内容回答问题[^\n]*)\s*(?:\n|$)/i)
@@ -428,7 +428,7 @@ const getMaterialStartIndex = (text, typeHint) => {
 const cleanMaterialText = (text, typeHint = '') => {
   const materialStartIndex = getMaterialStartIndex(text, typeHint)
   const candidateText = materialStartIndex >= 0 ? String(text || '').slice(materialStartIndex) : String(text || '')
-  const keepOptionLines = typeHint === 'seven_choice'
+  const keepOptionLines = ['seven_choice', 'five_choose_four'].includes(typeHint)
 
   return candidateText
     .split('\n')
@@ -459,6 +459,7 @@ const getMaterialTitleByTypeHint = (typeHint, index) => {
   const titleMap = {
     reading: '阅读材料',
     seven_choice: '七选五材料',
+    five_choose_four: '五选四材料',
     cloze: '完形填空材料',
     fill_blank: '语法填空材料',
     subjective: '综合技能材料',
@@ -498,15 +499,26 @@ const appendMaterialContent = (material, extraContent) => {
 }
 
 const extractFullGroupMaterial = (rawText, typeHint) => {
-  const formalText = extractFormalQuestionText(rawText)
+  const { examText } = splitAnswerSection(cleanRawText(rawText))
+  const sections = splitByMajorSections(examText)
+  const scopedTextByType = {
+    seven_choice: sections.reading || examText,
+    five_choose_four: sections.reading || examText,
+    cloze: sections.languageUse || examText,
+    fill_blank: sections.languageUse || examText,
+    subjective: sections.comprehensive || examText,
+  }
+  const formalText = scopedTextByType[typeHint] || examText
   const startPatterns = {
-    seven_choice: /(?:五选四|七选五|选句还原|短文还原)\s*(?:\n|$)/i,
+    seven_choice: /(?:七选五)\s*(?:\n|$)/i,
+    five_choose_four: /(?:五选四|七选五|选句还原|短文还原)\s*(?:\n|$)/i,
     cloze: /(?:完形填空)\s*(?:\n|$)/i,
     fill_blank: /(?:语法填空|短文填空|用所给词适当形式填空|在空白处填入[^\n]*)\s*(?:\n|$)/i,
     subjective: /(?:综合技能|任务型阅读|回答问题|根据短文内容回答问题[^\n]*)\s*(?:\n|$)/i,
   }
   const endPatterns = {
     seven_choice: /第三部分\s*语言运用|第一节\s*完形填空|完形填空/i,
+    five_choose_four: /第三部分\s*语言运用|第一节\s*完形填空|完形填空/i,
     cloze: /第二节|语法填空|短文填空|用所给词适当形式填空|在空白处填入/i,
     fill_blank: /第四部分\s*综合技能|综合技能|任务型阅读|回答问题|根据短文内容回答问题/i,
     subjective: /(?:^|\n)\s*\d{1,3}\s*[\.．、\)]\s*(?:书面表达|写作)|第二节\s*(?:（[^）]*）)?\s*(?:书面表达|写作)|英语参考答案|参考答案/i,
@@ -518,7 +530,7 @@ const extractFullGroupMaterial = (rawText, typeHint) => {
   const endMatch = endPatterns[typeHint]?.exec(searchTail)
   const sectionText = endMatch ? tail.slice(0, startMatch[0].length + endMatch.index) : tail
 
-  return cleanMaterialText(sectionText, typeHint)
+  return dedupeRepeatedLines(cleanMaterialText(sectionText, typeHint))
 }
 
 const fieldBoundaryRegex = /(?:英语参考答案|参考答案|答案与解析|第一部分|第二部分|第三部分|第四部分|第一节|第二节|完形填空|语法填空|综合技能|任务型阅读|回答问题|书面表达|阅读下面的短文|阅读下面短文|阅读下列材料|(?:^|\n)\s*[A-C]\s*(?:\n|$))/i
@@ -526,9 +538,71 @@ const pageNoiseRegex = /(?:--\s*\d+\s+of\s+\d+\s*--|第\s*\d+\s*页(?:（共\s*\
 
 const cleanPdfNoiseText = (value) => String(value ?? '')
   .replace(pageNoiseRegex, '\n')
+  .replace(/英语试题/g, '\n')
+  .replace(/余选项。?/g, '\n')
+  .replace(/^[\s·•*-]*$/gm, '')
   .replace(/[ \t]+/g, ' ')
   .replace(/\n{3,}/g, '\n\n')
   .trim()
+
+const cleanRawText = (rawText) => cleanPdfNoiseText(rawText)
+
+const splitAnswerSection = (cleanText) => {
+  const answerSectionIndex = findAnswerSectionIndex(cleanText)
+  return answerSectionIndex >= 0
+    ? { examText: cleanText.slice(0, answerSectionIndex), answerText: cleanText.slice(answerSectionIndex) }
+    : { examText: cleanText, answerText: '' }
+}
+
+const sliceBetween = (text, startPattern, endPattern) => {
+  const value = String(text || '')
+  const startMatch = startPattern.exec(value)
+  if (!startMatch) return ''
+  const tail = value.slice(startMatch.index)
+  const searchTail = tail.slice(startMatch[0].length)
+  const endMatch = endPattern ? endPattern.exec(searchTail) : null
+  return endMatch ? tail.slice(0, startMatch[0].length + endMatch.index) : tail
+}
+
+const splitByMajorSections = (examText) => {
+  const text = String(examText || '')
+  const readingStart = /(?:第二部分\s*)?(?:阅读理解|阅读下列材料)/i.exec(text)
+  const listening = sliceBetween(text, /(?:第一部分\s*)?听力(?:理解|部分|测试)?/i, /(?:第二部分|阅读理解|阅读下列材料)/i)
+    || (readingStart ? text.slice(0, readingStart.index).trim() : '')
+  return {
+    listening,
+    reading: sliceBetween(text, /(?:第二部分\s*)?(?:阅读理解|阅读下列材料)/i, /(?:第三部分\s*)?语言运用/i),
+    languageUse: sliceBetween(text, /(?:第三部分\s*)?语言运用/i, /(?:第四部分\s*)?综合技能/i),
+    comprehensive: sliceBetween(text, /(?:第四部分\s*)?综合技能/i, /(?:第二节|书面表达|写作|61\s*[.．、)]|英语参考答案|参考答案)/i),
+    writing: sliceBetween(text, /(?:61\s*[.．、)]|书面表达|写作)/i, /(?:英语参考答案|参考答案|答案与解析|$)/i),
+  }
+}
+
+
+const getSectionOrderedQuestionText = (rawText) => {
+  const { examText } = splitAnswerSection(cleanRawText(rawText))
+  const sections = splitByMajorSections(examText)
+  const orderedSections = [sections.listening, sections.reading, sections.languageUse, sections.comprehensive, sections.writing]
+    .map((section) => String(section || '').trim())
+    .filter(Boolean)
+  return orderedSections.length ? orderedSections.join('\n') : examText
+}
+
+const dedupeRepeatedLines = (text) => {
+  const seen = new Set()
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      const key = line.replace(/\s+/g, ' ')
+      if (key.length > 20 && seen.has(key)) return false
+      if (key.length > 20) seen.add(key)
+      return true
+    })
+    .join('\n')
+    .trim()
+}
 
 const sanitizeImportedField = (value) => {
   const text = cleanPdfNoiseText(value)
@@ -541,7 +615,7 @@ const sanitizeImportedField = (value) => {
 }
 
 const sanitizeQuestionOptions = (options, typeHint) => {
-  const maxOptions = ['listening', 'cloze'].includes(typeHint) ? 3 : 4
+  const maxOptions = ['listening', 'cloze'].includes(typeHint) ? 3 : (['five_choose_four', 'seven_choice'].includes(typeHint) ? 5 : 4)
   return (options || [])
     .slice(0, maxOptions)
     .map(sanitizeImportedField)
@@ -555,7 +629,7 @@ const normalizeParsedMaterials = (materials) => {
   materials.forEach((material) => {
     const localId = String(material.localId || '')
     let typeHint = ''
-    if (localId.startsWith('seven_choice-')) typeHint = 'seven_choice'
+    if (localId.startsWith('seven_choice-') || localId.startsWith('five_choose_four-')) typeHint = localId.startsWith('five_choose_four-') ? 'five_choose_four' : 'seven_choice'
     if (localId.startsWith('cloze-')) typeHint = 'cloze'
     if (localId.startsWith('fill_blank-')) typeHint = 'fill_blank'
     if (localId.startsWith('subjective-')) typeHint = 'subjective'
@@ -566,13 +640,14 @@ const normalizeParsedMaterials = (materials) => {
 
     const endByType = {
       seven_choice: /(?:第三部分\s*语言运用|第一节\s*完形填空|完形填空)/i,
+      five_choose_four: /(?:第三部分\s*语言运用|第一节\s*完形填空|完形填空)/i,
       cloze: /(?:第二节|语法填空|短文填空|用所给词适当形式填空|在空白处填入)/i,
       fill_blank: /(?:第四部分\s*综合技能|综合技能|任务型阅读|回答问题|根据短文内容回答问题)/i,
       subjective: /(?:^|\n)\s*\d{1,3}\s*[\.．、\)]\s*(?:书面表达|写作)|第二节\s*(?:（[^）]*）)?\s*(?:书面表达|写作)|英语参考答案|参考答案/i,
     }
     const cleanContent = cleanPdfNoiseText(material.content)
     const endMatch = endByType[typeHint]?.exec(cleanContent)
-    material.content = cleanMaterialText(endMatch ? cleanContent.slice(0, endMatch.index) : cleanContent, typeHint)
+    material.content = dedupeRepeatedLines(cleanMaterialText(endMatch ? cleanContent.slice(0, endMatch.index) : cleanContent, typeHint))
   })
 }
 
@@ -581,7 +656,7 @@ const rebalanceFullPaperMaterialBindings = (questions, materials) => {
   const firstMaterialId = (prefix, offset = 0) => materials.filter((material) => String(material.localId || '').startsWith(prefix))[offset]?.localId || null
   const readingIds = materials.filter((material) => String(material.localId || '').startsWith('reading-')).map((material) => material.localId)
   const readingImageId = firstMaterialId('reading_image-')
-  const sevenId = firstMaterialId('seven_choice-')
+  const sharedChoiceId = firstMaterialId('five_choose_four-') || firstMaterialId('seven_choice-')
   const clozeId = firstMaterialId('cloze-')
   const fillBlankId = firstMaterialId('fill_blank-')
   const subjectiveId = firstMaterialId('subjective-')
@@ -593,7 +668,7 @@ const rebalanceFullPaperMaterialBindings = (questions, materials) => {
     if (questionNo >= 21 && questionNo <= 23 && readingImageId) nextMetadata.materialLocalId = readingImageId
     if (questionNo >= 24 && questionNo <= 27 && readingIds[0]) nextMetadata.materialLocalId = readingIds[0]
     if (questionNo >= 28 && questionNo <= 31 && readingIds[1]) nextMetadata.materialLocalId = readingIds[1]
-    if (questionNo >= 32 && questionNo <= 35 && sevenId) nextMetadata.materialLocalId = sevenId
+    if (questionNo >= 32 && questionNo <= 35 && sharedChoiceId) nextMetadata.materialLocalId = sharedChoiceId
     if (questionNo >= 36 && questionNo <= 45 && clozeId) nextMetadata.materialLocalId = clozeId
     if (questionNo >= 46 && questionNo <= 55 && fillBlankId) nextMetadata.materialLocalId = fillBlankId
     if (questionNo >= 56 && questionNo <= 60 && subjectiveId) nextMetadata.materialLocalId = subjectiveId
@@ -633,7 +708,7 @@ const splitQuestionBlocks = (rawText) => {
     return rawText.split(/\[QUESTION\]/i).slice(1).map((block) => ({ block, materialText: '', typeHint: 'choice' }))
   }
 
-  const normalizedText = extractFormalQuestionText(rawText)
+  const normalizedText = getSectionOrderedQuestionText(rawText)
 
   const markerRegex = /(^|\n|\s)(?:第\s*)?(\d{1,3})\s*(?:题)?(?:[\.．、\)]\s*|\s+)/g
   const markers = []
@@ -680,7 +755,7 @@ const splitQuestionBlocks = (rawText) => {
     const prefixStart = previousMarker ? previousMarker.index : Math.max(0, marker.index - 1200)
     const prefix = normalizedText.slice(prefixStart, marker.index).trim()
     const canUseReadingPrefix = marker.detected.typeHint !== 'reading' || getMaterialStartIndex(prefix, 'reading') >= 0
-    const materialText = canUseReadingPrefix && ['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix, marker.detected.typeHint) ? cleanMaterialText(prefix, marker.detected.typeHint) : ''
+    const materialText = canUseReadingPrefix && ['reading', 'seven_choice', 'five_choose_four', 'cloze', 'fill_blank', 'subjective'].includes(marker.detected.typeHint) && looksLikeMaterialText(prefix, marker.detected.typeHint) ? cleanMaterialText(prefix, marker.detected.typeHint) : ''
 
     return {
       block,
@@ -729,6 +804,17 @@ const splitFallbackChoiceBlocks = (formalText) => {
   }).filter(Boolean)
 }
 
+
+const parseSharedCandidateOptions = (text, limit = 7) => {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^[A-G][\.．、\)]\s+/.test(line))
+    .slice(0, limit)
+    .map((line) => line.replace(/^[A-G][\.．、\)]\s+/, '').trim())
+    .filter(Boolean)
+}
+
 const parseInlineOptions = (block) => {
   const optionStart = block.search(firstOptionRegex)
 
@@ -738,7 +824,7 @@ const parseInlineOptions = (block) => {
 
   const optionText = block.slice(optionStart).replace(/\s+/g, ' ').trim()
   const options = []
-  const optionRegex = /(?:^|\s)([A-D])(?:[\.．、\)]\s*|\s+)([\s\S]*?)(?=\s+[A-D](?:[\.．、\)]\s*|\s+)|$)/g
+  const optionRegex = /(?:^|\s)([A-G])(?:[\.．、\)]\s*|\s+)([\s\S]*?)(?=\s+[A-G](?:[\.．、\)]\s*|\s+)|$)/g
   let match = optionRegex.exec(optionText)
 
   while (match) {
@@ -820,16 +906,16 @@ const parseImportText = (rawText, fallbackTitle) => {
 
     seenQuestionNumbers.add(questionNo)
 
-    if (inferredType.typeHint === 'cloze' && currentMaterialLocalId?.startsWith('seven_choice-')) {
-      const sevenChoiceCandidates = extractSevenChoiceTail(prefixText) || extractSevenChoiceCandidates(prefixText)
-      const sevenChoiceMaterial = materialIdMap.get(currentMaterialLocalId)
-      appendMaterialContent(sevenChoiceMaterial, sevenChoiceCandidates)
+    if (inferredType.typeHint === 'cloze' && (currentMaterialLocalId?.startsWith('seven_choice-') || currentMaterialLocalId?.startsWith('five_choose_four-'))) {
+      const sharedChoiceCandidates = extractSevenChoiceTail(prefixText) || extractSevenChoiceCandidates(prefixText)
+      const sharedChoiceMaterial = materialIdMap.get(currentMaterialLocalId)
+      appendMaterialContent(sharedChoiceMaterial, sharedChoiceCandidates)
     }
 
     if (materialText) {
-      const shouldReuseGroupedMaterial = ['seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint) && currentMaterialLocalId?.startsWith(`${inferredType.typeHint}-`)
+      const shouldReuseGroupedMaterial = ['seven_choice', 'five_choose_four', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint) && currentMaterialLocalId?.startsWith(`${inferredType.typeHint}-`)
       const extractedGroupMaterialText = extractFullGroupMaterial(rawText, inferredType.typeHint)
-      const cleanedPrefixMaterialText = ['seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint) ? cleanMaterialText(prefixText, inferredType.typeHint) : materialText
+      const cleanedPrefixMaterialText = ['seven_choice', 'five_choose_four', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint) ? cleanMaterialText(prefixText, inferredType.typeHint) : materialText
       const groupedMaterialText = extractedGroupMaterialText || cleanedPrefixMaterialText
 
       if (shouldReuseGroupedMaterial) {
@@ -865,10 +951,7 @@ const parseImportText = (rawText, fallbackTitle) => {
     const hasExplicitType = Boolean(block.match(/题型[:：]\s*(.+)/)?.[1])
     const type = hasExplicitType ? normalizeDraftQuestionType(block.match(/题型[:：]\s*(.+)/)?.[1], warnings, `第 ${questionNo} 题`) : inferredType.type
     const parsedText = sanitizeImportedField(parseQuestionText(block))
-    if (inferredType.typeHint === 'cloze' && currentMaterialLocalId?.startsWith('cloze-') && parsedText) {
-      appendMaterialContent(materialIdMap.get(currentMaterialLocalId), parsedText)
-    }
-    const text = ['seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : parsedText
+    const text = ['seven_choice', 'five_choose_four', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : parsedText
 
     if (!text) {
       warnings.push({ level: 'WARNING', code: 'MISSING_QUESTION_TEXT', message: `第 ${questionNo} 题题干未明确解析，请人工补充。`, targetType: 'QUESTION' })
@@ -878,13 +961,18 @@ const parseImportText = (rawText, fallbackTitle) => {
       .map((letter) => block.match(new RegExp(`(?:^|\\n|\\s)${letter}(?:[\\.．、\\)]\\s*|\\s+)([^A-D\\n]+)`, 'm'))?.[1]?.trim())
       .filter(Boolean)
     const inlineOptions = parseInlineOptions(block)
-    const options = sanitizeQuestionOptions(inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions, inferredType.typeHint)
+    const sharedOptions = ['five_choose_four', 'seven_choice'].includes(inferredType.typeHint)
+      ? parseSharedCandidateOptions(`${prefixText}
+${block}`, inferredType.typeHint === 'five_choose_four' ? 5 : 7)
+      : []
+    const candidateOptions = sharedOptions.length ? sharedOptions : (inlineOptions.length > labeledOptions.length ? inlineOptions : labeledOptions)
+    const options = sanitizeQuestionOptions(candidateOptions, inferredType.typeHint)
     const answerRaw = block.match(/(?:答案|参考答案)[:：]\s*(.+)/)?.[1]?.trim() || ''
     const answerDetail = sanitizeImportedField(answerDetailMap.get(questionNo) || '')
     const mappedAnswer = answerMap.get(questionNo)
     const answer = type === 'CHOICE' ? (mappedAnswer ?? answerLetterMap[answerRaw.toUpperCase()] ?? null) : (sanitizeImportedField(answerRaw) || answerDetail)
     const score = Number(block.match(/分值[:：]\s*([0-9.]+)/)?.[1] || 0) || (inferredType.typeHint === 'listening' ? 1 : 2)
-    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'seven_choice', 'cloze', 'fill_blank', 'subjective', 'translation'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
+    const materialLocalId = block.match(/材料ID[:：]\s*(.+)/)?.[1]?.trim() || (['reading', 'seven_choice', 'five_choose_four', 'cloze', 'fill_blank', 'subjective', 'translation'].includes(inferredType.typeHint) ? currentMaterialLocalId : null)
 
     const choiceLike = isChoiceLikeQuestion(text, options)
 
@@ -895,12 +983,12 @@ const parseImportText = (rawText, fallbackTitle) => {
     if (materialLocalId && !materialIdMap.has(materialLocalId)) warnings.push({ level: 'WARNING', code: 'MATERIAL_BINDING_UNCERTAIN', message: `第 ${questionNo} 题引用的材料 ${materialLocalId} 未找到，入库前请确认。`, targetType: 'QUESTION' })
 
     questions.push({
-      type, text: text || (['seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : `第${questionNo}题`), options: options.length ? options : null, answer, score,
+      type, text: text || (['seven_choice', 'five_choose_four', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : `第${questionNo}题`), options: options.length ? options : null, answer, score,
       knowledgePoint: block.match(/知识点[:：]\s*(.+)/)?.[1]?.trim() || '未分类',
       referenceAnswer: type === 'CHOICE' ? '' : (sanitizeImportedField(answerRaw) || answerDetail),
       explanation: sanitizeImportedField(block.match(/(?:解析|答案解析|解题思路|原因)[:：]\s*(.+)/)?.[1] || ''),
       orderIndex: Number(questionNo) || index + 1,
-      metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint },
+      metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint, displayType: inferredType.displayType || inferredType.typeHint },
     })
   })
 
@@ -914,7 +1002,7 @@ const parseImportText = (rawText, fallbackTitle) => {
     }
 
     const inferredType = detectTypeHintByQuestionNumber(questionNo) || { type: 'CHOICE', typeHint: 'choice' }
-    const materialLocalId = ['seven_choice', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint)
+    const materialLocalId = ['seven_choice', 'five_choose_four', 'cloze', 'fill_blank', 'subjective'].includes(inferredType.typeHint)
       ? materials.find((material) => material.localId.startsWith(`${inferredType.typeHint}-`))?.localId || null
       : (inferredType.typeHint === 'translation' ? materials.find((material) => material.localId.startsWith('subjective-'))?.localId || null : null)
     const mappedAnswer = answerMap.get(questionNo)
@@ -923,7 +1011,7 @@ const parseImportText = (rawText, fallbackTitle) => {
 
     questions.push({
       type: inferredType.type,
-      text: ['seven_choice', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : `第${questionNo}题`,
+      text: ['seven_choice', 'five_choose_four', 'cloze', 'fill_blank'].includes(inferredType.typeHint) ? `第${questionNo}空` : `第${questionNo}题`,
       options: null,
       answer,
       score: 2,
@@ -931,7 +1019,7 @@ const parseImportText = (rawText, fallbackTitle) => {
       referenceAnswer: inferredType.type === 'CHOICE' ? '' : answerDetail,
       explanation: '',
       orderIndex: questionNumber,
-      metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint, synthesized: true },
+      metadata: { questionNo, materialLocalId, typeHint: inferredType.typeHint, displayType: inferredType.displayType || inferredType.typeHint, synthesized: true },
     })
     seenQuestionNumbers.add(questionNo)
     warnings.push({ level: 'WARNING', code: 'QUESTION_SYNTHESIZED_FROM_NUMBER', message: `第 ${questionNo} 题只识别到题号，已生成安全草稿题，请人工补全题干/答案。`, targetType: 'QUESTION' })
@@ -953,7 +1041,7 @@ const parseImportText = (rawText, fallbackTitle) => {
 }
 
 const getParserDiagnostics = (rawText, fallbackTitle = 'parser diagnostics') => {
-  const formalQuestionText = extractFormalQuestionText(rawText)
+  const formalQuestionText = getSectionOrderedQuestionText(rawText)
   const parsed = parseImportText(rawText, fallbackTitle)
   const firstQuestionMatch = formalQuestionText.match(/(^|\n|\s)1\s*[\.．、\)]\s*([\s\S]{0,220})/)
   const secondQuestionMatch = formalQuestionText.match(/(^|\n|\s)2\s*[\.．、\)]\s*([\s\S]{0,220})/)

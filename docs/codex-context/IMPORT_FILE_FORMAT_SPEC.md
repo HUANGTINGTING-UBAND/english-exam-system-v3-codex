@@ -297,3 +297,15 @@ D. 8:30
 - 五选四 / 七选五是共享候选项题组；完形填空是逐题独立选项题组；语法填空 / 短文填空是 `fill_blank`，不是翻译题。
 - 参考答案区只用于回填 answer；没有明确解析标记时 explanation 应为空。
 - 具体 PDF 样例只能出现在 smoke test / regression test，不得成为 parser 主逻辑的硬编码条件。
+
+## 14. Full-paper parser 切片流程要求
+
+为避免材料串段、题型串段、答案串段，非标准整卷 PDF parser 必须按以下顺序处理：
+
+1. `cleanRawText(rawText)`：清理页眉、页脚、页码、水印、分页符、`英语试题`、OCR 残片和重复空白。
+2. `splitAnswerSection(cleanText)`：先切开正式试题区与参考答案区；答案区只用于回填答案，不参与题目生成。
+3. `splitByMajorSections(examText)`：按听力、阅读理解、语言运用、综合技能、写作切片。
+4. 在 section slice 内继续按题组切片：阅读 A/B/C、五选四/七选五、完形、语法填空、综合技能、写作。
+5. `finalNormalizeQuestions()`：按题号去重、按题号升序、校验材料与题型匹配，并统一清洗 material、questionText、options、answer、explanation。
+
+不得在全局 rawText 中跨 section 搜索材料；如果某题组无法稳定识别，应保留可校对草稿和 warning，而不是把下一 section 拼进当前 material。

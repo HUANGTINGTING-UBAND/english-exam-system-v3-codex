@@ -358,3 +358,15 @@ node scripts/smoke-import-parser.js
 - 抄写句子为 `copy_sentence`，不显示 choice options。
 - 找不同类为 `odd_one_out`，可兼容 `CHOICE`，但保留真实 typeHint。
 - 方框选词为 `word_box_fill`，共享词库不误识别为完形。
+
+## 17. Full-paper 切片顺序和字段清洗回归
+
+新增整卷 PDF 回归时，必须覆盖以下失败点：
+
+- 五选四 / 七选五材料不得包含上一篇阅读最后一题题干、选项、页眉或 OCR 残片。
+- 完形材料不得包含五选四 / 七选五空号正文，跨页重复段落应去重。
+- 听力和阅读选项不得包含 `英语试题`、页码、分页符或下一篇材料开头。
+- 完形 36—45 每题只出现一次，逐题独立提取 A/B/C 或 A/B/C/D 选项，不能漏 A 选项。
+- 语法填空 / 短文填空必须保留 `typeHint/displayType = fill_blank`，绑定 fill_blank material，不得绑定 cloze material。
+- 回答问题 56—59 必须显示为 reading_answer / subjective，只有明确翻译题才显示 translation。
+- 所有 answer 必须在 section heading 前截断，例如 `shows第四部分...` 应清洗为 `shows`。

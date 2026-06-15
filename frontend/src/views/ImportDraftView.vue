@@ -126,7 +126,7 @@ const handleConfirm = async () => {
 
 const answerLabel = (question) => {
   const typeHint = question?.typeHint || ''
-  if (['choice', 'listening', 'reading', 'seven_choice', 'cloze'].includes(typeHint) || question?.type === 'CHOICE' || question?.type === 'CLOZE') return '答案（选择题可填 A/B/C/D 或 0/1/2/3）'
+  if (['choice', 'listening', 'reading', 'seven_choice', 'five_choose_four', 'seven_choose_five', 'cloze'].includes(typeHint) || question?.type === 'CHOICE' || question?.type === 'CLOZE') return '答案（选择题可填 A/B/C/D 或 0/1/2/3）'
   if (typeHint === 'fill_blank') return '答案'
   if (['subjective', 'reading_answer', 'short_answer'].includes(typeHint)) return '参考答案'
   if (typeHint === 'translation') return '参考译文'
@@ -136,7 +136,7 @@ const answerLabel = (question) => {
 
 const shouldShowOptions = (question) => {
   const typeHint = question?.typeHint || ''
-  return ['choice', 'listening', 'reading', 'seven_choice', 'cloze'].includes(typeHint) || ['CHOICE', 'CLOZE'].includes(question?.type)
+  return ['choice', 'listening', 'reading', 'seven_choice', 'five_choose_four', 'seven_choose_five', 'cloze'].includes(typeHint) || ['CHOICE', 'CLOZE'].includes(question?.type)
 }
 const normalizeOptions = (value) => String(value || '').split('\n').map((item) => item.trim()).filter(Boolean)
 const normalizeAnswer = (question) => {
@@ -155,7 +155,7 @@ const prepareJobForEdit = (job) => {
       optionsText: Array.isArray(question.options) ? question.options.join('\n') : '',
       answerText: question.answer ?? '',
       materialLocalId: question.metadata?.materialLocalId || '',
-      typeHint: question.metadata?.typeHint || 'choice',
+      typeHint: question.metadata?.displayType || question.metadata?.typeHint || 'choice',
     })).sort(sortQuestionsByNumber),
   }
 }

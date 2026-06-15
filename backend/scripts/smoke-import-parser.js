@@ -128,8 +128,9 @@ Your school can become better if everyone gives a hand.
 A. Start with small things.
 B. Keep the classroom clean.
 C. Work with your classmates.
+A good attitude (态度) can spread.
 D. Share your ideas.
-E. Make your school better.
+E. Think about things you enjoy at school.
 完形填空
 Oh, no? How silly I was to forget the important thing. The boy looked at the bag and smiled.
 36．
@@ -227,8 +228,9 @@ Small actions can make the school cleaner and warmer.
 A. Start with small things.
 B. Keep the classroom clean.
 C. Work with your classmates.
+A good attitude (态度) can spread.
 D. Share your ideas.
-E. Make your school better.`
+E. Think about things you enjoy at school.`
 const clozeOptionMap = {
   36: ['cup', 'bowl', 'spoon'],
   37: ['fact', 'idea', 'trouble'],
@@ -245,6 +247,8 @@ const generatedCloze = `第三部分 语言运用
 第一节 完形填空
 阅读下面的短文，掌握其大意，然后从各题所给的 A、B、C 三个选项中选出一个最佳选项。
 Oh, no? How silly I was to practice basketball inside! That gave me a (n)
+Mom, Toby broke your cup. Go outside. No treats for you.
+Mom, Toby broke your cup. Go outside. No treats for you.
 ${Array.from({ length: 10 }, (_, index) => {
   const n = 36 + index
   const [a, b, c] = clozeOptionMap[n]
@@ -275,7 +279,7 @@ Mike: I want to travel with friends and learn new things.
 Gina: Both family and friends are important to me.`
 const generatedAnswers = `英语参考答案
 1．B 2．A 3．C 4．A 5．C
-46．The 47．provided 48．word2 49．word3 50．word4 51．word5 52．word6 53．word7 54．word8 55．word9
+46．The 47．provided 48．word2 49．word3 50．word4 51．word5 52．word6 53．word7 54．word8 55．shows第四部分 综合技能
 56．He likes learning foreign languages. 57．With his friends. 58．Yes. 59．Practice often. 60．把画线句子翻译成中文。 61．写作略`
 const fullPaperRawText = `${generatedListening}
 阅读理解
@@ -293,7 +297,7 @@ const fullQuestionNumbers = new Set(fullPaperParsed.questions.map((question) => 
 const fullMaterialsByContent = {
   tan: fullPaperParsed.materials.find((material) => material.content.includes('The Tan family')),
   insects: fullPaperParsed.materials.find((material) => material.content.includes('What are insects')),
-  seven: fullPaperParsed.materials.find((material) => material.content.includes('Make a Difference to Your School')),
+  five: fullPaperParsed.materials.find((material) => material.content.includes('Make a Difference to Your School')),
   cloze: fullPaperParsed.materials.find((material) => material.content.includes('Oh, no? How silly I was')),
   fill: fullPaperParsed.materials.find((material) => material.content.includes('Long, long ago')),
   subjective: fullPaperParsed.materials.find((material) => material.content.includes('My name is Jeff')),
@@ -366,31 +370,37 @@ if (materialContents.some((content) => content.includes('What is reading questio
   throw new Error('Expected reading question stems not to become standalone materials')
 }
 
-if (!fullMaterialsByContent.seven || !fullMaterialsByContent.seven.content.includes('Students can help by caring about the school garden') || !fullMaterialsByContent.seven.content.includes('A. Start with small things') || !fullMaterialsByContent.seven.content.includes('E. Make your school better')) {
-  throw new Error('Expected seven_choice material to include title, 32-35 context, and A-E candidates')
+if (!fullMaterialsByContent.five || !fullMaterialsByContent.five.content.startsWith('Make a Difference to Your School') || !fullMaterialsByContent.five.content.includes('Students can help by caring about the school garden') || !fullMaterialsByContent.five.content.includes('A. Start with small things') || !fullMaterialsByContent.five.content.includes('E. Think about things you enjoy at school')) {
+  throw new Error('Expected five_choose_four material to start with the title and include 32-35 context plus A-E candidates')
 }
-if (fullMaterialsByContent.seven.content.includes('阅读下面的短文，掌握其大意')) {
-  throw new Error('Expected seven_choice material not to include cloze instructions')
+for (const forbidden of ['What can be the best title for the text?', 'Insects and Tools', '英语试题', '余选项', '阅读下面的短文，掌握其大意']) {
+  if (fullMaterialsByContent.five.content.includes(forbidden)) throw new Error(`Expected five_choose_four material not to include ${forbidden}`)
 }
 
 for (const n of ['32', '33', '34', '35']) {
   const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n)
-  if (question?.metadata?.materialLocalId !== fullMaterialsByContent.seven.localId) {
-    throw new Error(`Expected seven_choice question ${n} to bind to one seven_choice material`)
+  if (question?.metadata?.materialLocalId !== fullMaterialsByContent.five.localId) {
+    throw new Error(`Expected five_choose_four question ${n} to bind to one five_choose_four material`)
   }
 }
 
 const question33 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '33')
-if (question33?.metadata?.typeHint !== 'seven_choice' || question33.type === 'CLOZE' || question33.text.length > 20) {
-  throw new Error('Expected question 33 to be a short seven_choice blank, not CLOZE or a long paragraph')
+if (!['five_choose_four'].includes(question33?.metadata?.displayType || question33?.metadata?.typeHint) || question33.type === 'CLOZE' || question33.text.length > 20) {
+  throw new Error('Expected question 33 to be a short five_choose_four blank, not CLOZE or a long paragraph')
 }
 const question35 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '35')
-if (JSON.stringify(question35?.options || []).includes('Oh, no?') || String(question35?.answer || '').includes('第三部分')) {
+if (JSON.stringify(question35?.options || []).includes('Oh, no?') || JSON.stringify(question35?.options || []).includes('good attitude') || String(question35?.answer || '').includes('第三部分')) {
   throw new Error('Expected question 35 options/answer not to contain cloze start or section heading')
 }
 
-if (!fullMaterialsByContent.cloze) {
-  throw new Error('Expected cloze material to exist')
+if (!fullMaterialsByContent.cloze || !fullMaterialsByContent.cloze.content.startsWith('Oh, no? How silly I was to practice basketball inside!')) {
+  throw new Error('Expected cloze material to exist and start at the cloze passage')
+}
+for (const forbidden of ['A good attitude', '35 ', '英语试题', '阅读下面短文，在空白处填入']) {
+  if (fullMaterialsByContent.cloze.content.includes(forbidden)) throw new Error(`Expected cloze material not to include ${forbidden}`)
+}
+if ((fullMaterialsByContent.cloze.content.match(/Mom, Toby broke your cup/g) || []).length > 1 || (fullMaterialsByContent.cloze.content.match(/Go outside\. No treats for you/g) || []).length > 1) {
+  throw new Error('Expected cloze material to dedupe repeated cross-page lines')
 }
 
 const question36 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '36')
@@ -421,14 +431,22 @@ if (!fullMaterialsByContent.fill || fullMaterialsByContent.fill.type === 'CLOZE_
 
 for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
   const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n)
-  if (question?.metadata?.typeHint !== 'fill_blank') {
-    throw new Error(`Expected fill_blank question ${n} to keep fill_blank typeHint`)
+  if (question?.metadata?.typeHint !== 'fill_blank' || question?.metadata?.displayType !== 'fill_blank' || ['CLOZE', 'TRANSLATION'].includes(question?.type)) {
+    throw new Error(`Expected fill_blank question ${n} to keep fill_blank display type and avoid CLOZE/TRANSLATION`)
   }
 }
 
 const question46 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '46')
 if (question46?.type === 'CLOZE' || question46?.type === 'TRANSLATION' || question46?.text?.includes('(provide) water') || question46?.text?.includes('48 (cut)')) {
   throw new Error('Expected question 46 to be fill_blank-compatible, not TRANSLATION/CLOZE, and not contain the whole passage')
+}
+
+const question55 = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === '55')
+if (question55?.answer !== 'shows' || String(question55?.answer || '').includes('第四部分')) {
+  throw new Error(`Expected question 55 answer to be exactly shows, got ${question55?.answer}`)
+}
+if (question46?.metadata?.materialLocalId === 'cloze-5' || !question46?.metadata?.materialLocalId?.startsWith('fill_blank-')) {
+  throw new Error('Expected question 46 to bind to fill_blank material, not cloze material')
 }
 for (const n of Array.from({ length: 10 }, (_, index) => String(46 + index))) {
   const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n)
@@ -443,9 +461,12 @@ if (!fullMaterialsByContent.subjective) {
 
 for (const n of ['56', '57', '58', '59', '60']) {
   const question = fullPaperParsed.questions.find((item) => item.metadata?.questionNo === n)
-  const expectedTypeHints = n === '60' ? ['translation', 'subjective'] : ['subjective']
-  if (!expectedTypeHints.includes(question?.metadata?.typeHint)) {
+  const expectedTypeHints = n === '60' ? ['translation'] : ['subjective', 'reading_answer', 'short_answer']
+  if (!expectedTypeHints.includes(question?.metadata?.displayType || question?.metadata?.typeHint)) {
     throw new Error(`Expected subjective/translation question ${n} to keep its typeHint`)
+  }
+  if (Number(n) >= 56 && Number(n) <= 59 && question?.type === 'TRANSLATION') {
+    throw new Error(`Expected reading-answer question ${n} not to use TRANSLATION type`)
   }
 }
 
@@ -480,6 +501,9 @@ for (const question of fullPaperParsed.questions) {
   if (JSON.stringify(question.options || []).match(materialStartPattern)) throw new Error(`Expected question ${question.metadata?.questionNo} options not to contain material starts`)
   if (question.explanation && explanationInstructionPattern.test(question.explanation)) throw new Error(`Expected question ${question.metadata?.questionNo} explanation not to contain section instructions`)
   if (question.explanation && !/解析|答案解析|解题思路|原因/.test(question.explanation)) throw new Error(`Expected question ${question.metadata?.questionNo} explanation to be empty unless explicit analysis marker exists`)
+  for (const fieldText of [question.text, question.answer, question.explanation, JSON.stringify(question.options || [])]) {
+    if (/英语试题|--\s*\d+\s+of\s+\d+|第\s*\d+\s*页/.test(String(fieldText || ''))) throw new Error(`Expected question ${question.metadata?.questionNo} fields to be free of page noise`)
+  }
   if (!['CHOICE', 'CLOZE'].includes(question.type) && Array.isArray(question.options) && question.options.length > 0) throw new Error(`Expected non-choice question ${question.metadata?.questionNo} not to expose choice options`)
 }
 
