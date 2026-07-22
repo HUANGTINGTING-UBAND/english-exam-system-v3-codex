@@ -614,11 +614,20 @@ const sanitizeImportedField = (value) => {
   return cleanText.replace(/\s+/g, ' ').replace(/\s+[A-C]\s*$/, '').trim()
 }
 
+const sanitizeQuestionOption = (value) => {
+  const optionText = String(value || '').replace(
+    /\s*(?:参考答案|答案解析|解题思路|材料ID|答案|解析|原因|知识点|分值)[:：][\s\S]*$/u,
+    '',
+  )
+
+  return sanitizeImportedField(optionText)
+}
+
 const sanitizeQuestionOptions = (options, typeHint) => {
   const maxOptions = ['listening', 'cloze'].includes(typeHint) ? 3 : (['five_choose_four', 'seven_choice'].includes(typeHint) ? 5 : 4)
   return (options || [])
     .slice(0, maxOptions)
-    .map(sanitizeImportedField)
+    .map(sanitizeQuestionOption)
     .filter(Boolean)
     .filter((option) => !(typeHint === 'reading' && option.length > 90 && /[.!?].+[.!?]/.test(option)))
     .filter((option) => option.length <= 160)
@@ -933,6 +942,7 @@ const parseQuestionText = (block) => {
 
 const parseImportText = (rawText, fallbackTitle) => {
   rawText = cleanPdfNoiseText(rawText)
+  const isStructuredFormat = rawText.includes('[QUESTION]')
   const warnings = []
   const examMeta = parseExamMeta(rawText, fallbackTitle)
   const materials = []
@@ -962,7 +972,7 @@ const parseImportText = (rawText, fallbackTitle) => {
   const seenQuestionNumbers = new Set()
   const questions = []
 
-  if (findAnswerSectionIndex(rawText) >= 0) {
+  if (!isStructuredFormat && findAnswerSectionIndex(rawText) >= 0) {
     warnings.push({ level: 'INFO', code: 'ANSWER_SECTION_SKIPPED_FOR_QUESTION_CREATION', message: '已识别答案区；答案区仅用于回填答案，不参与题目生成。', targetType: 'IMPORT_JOB' })
   }
 
@@ -1071,7 +1081,7 @@ ${block}`, inferredType.typeHint === 'five_choose_four' ? 5 : 7)
     })
   })
 
-  const formalQuestionText = rawText.includes('[QUESTION]') ? rawText : extractFormalQuestionText(rawText)
+  const formalQuestionText = isStructuredFormat ? '' : extractFormalQuestionText(rawText)
   const hasFillBlankSignals = /(?:语法填空|短文填空|用所给词适当形式填空|在空白处填入)/.test(formalQuestionText)
     || Array.from({ length: 10 }, (_, index) => String(46 + index)).some((numberText) => answerDetailMap.has(numberText) || new RegExp(`(^|\\n|\\s)(?:第\\s*)?${numberText}\\s*(?:题)?(?:[\\.．、\\)]\\s*|\\s+)`).test(formalQuestionText))
   for (let questionNumber = 1; questionNumber <= 61; questionNumber += 1) {
@@ -1110,7 +1120,9 @@ ${block}`, inferredType.typeHint === 'five_choose_four' ? 5 : 7)
   ensureFillBlankMaterialForRange(questions, materials, warnings, hasFillBlankSignals)
   questions.sort((a, b) => Number(a.metadata?.questionNo || a.orderIndex) - Number(b.metadata?.questionNo || b.orderIndex))
   normalizeParsedMaterials(materials)
-  rebalanceFullPaperMaterialBindings(questions, materials)
+  if (!isStructuredFormat) {
+    rebalanceFullPaperMaterialBindings(questions, materials)
+  }
 
   if (questions.length === 0) {
     warnings.push({
