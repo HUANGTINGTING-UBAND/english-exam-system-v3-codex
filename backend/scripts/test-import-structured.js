@@ -7,6 +7,8 @@ dotenv.config({
   path: path.join(__dirname, '..', '.env'),
 })
 
+const prisma = require('../src/lib/prisma')
+
 const apiBaseUrl =
   process.env.TEST_API_BASE_URL || 'http://127.0.0.1:3000/api'
 
@@ -71,6 +73,8 @@ const normalizeOptions = (value) => {
   return []
 }
 
+let createdJobId = null
+
 const main = async () => {
   assert.ok(username, 'backend/.env 缺少 TEST_TEACHER_USERNAME')
   assert.ok(password, 'backend/.env 缺少 TEST_TEACHER_PASSWORD')
@@ -94,20 +98,39 @@ const main = async () => {
 
   assert.ok(token, '登录成功，但响应中没有 token')
 
-  const jobsResponse = await authorizedFetch(
+  const createResponse = await authorizedFetch(
     `${apiBaseUrl}/import/jobs`,
     token,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        title: `结构化导入自动回归-${Date.now()}`,
+        rawText,
+      }),
+    },
   )
-  const jobsData = await getPayload(jobsResponse, '读取导入任务列表')
-  const jobs = Array.isArray(jobsData) ? jobsData : jobsData.jobs || []
 
-  const job = jobs.find(
-    (item) => item.title === '标准阅读题基线测试 001',
+  const job = await getPayload(createResponse, '创建导入测试任务')
+  createdJobId = job?.id || null
+
+  assert.ok(createdJobId, '导入任务创建成功，但响应中没有任务 ID')
+
+  assert.equal(
+    job.questions?.length,
+    2,
+    '创建导入任务时应当直接生成 2 道草稿题',
   )
 
-  assert.ok(
-    job,
-    '没有找到“标准阅读题基线测试 001”，请先在网页创建该导入任务',
+  assert.equal(
+    job.materials?.length,
+    1,
+    '创建导入任务时应当直接生成 1 份草稿材料',
+  )
+
+  assert.equal(
+    job.warnings?.length,
+    0,
+    '标准格式创建任务时不应产生 warning',
   )
 
   const reparseResponse = await authorizedFetch(
@@ -189,8 +212,29 @@ const main = async () => {
   console.log(`Warnings: ${warnings.length}`)
 }
 
-main().catch((error) => {
-  console.error('❌ Structured import regression failed.')
-  console.error(error)
-  process.exitCode = 1
-})
+const run = async () => {
+  try {
+    await main()
+  } catch (error) {
+    console.error('❌ Structured import regression failed.')
+    console.error(error)
+    process.exitCode = 1
+  } finally {
+    if (createdJobId) {
+      try {
+        await prisma.importJob.delete({
+          where: { id: createdJobId },
+        })
+        console.log('🧹 Test import job cleaned up.')
+      } catch (cleanupError) {
+        console.error('❌ Failed to clean up test import job.')
+        console.error(cleanupError)
+        process.exitCode = 1
+      }
+    }
+
+    await prisma.$disconnect()
+  }
+}
+
+run()
