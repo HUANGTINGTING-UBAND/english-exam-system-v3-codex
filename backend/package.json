@@ -7,7 +7,8 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "test:db": "node scripts/test-db.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "test:import:structured": "node scripts/test-import-structured.js"
   },
   "keywords": [],
   "author": "",
