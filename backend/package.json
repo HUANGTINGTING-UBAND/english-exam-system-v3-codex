@@ -8,7 +8,8 @@
     "start": "node index.js",
     "test:db": "node scripts/test-db.js",
     "seed": "node scripts/seed.js",
-    "test:import:structured": "node scripts/test-import-structured.js"
+    "test:import:structured": "node scripts/test-import-structured.js",
+    "test:import:pdf": "node scripts/test-import-pdf.js"
   },
   "keywords": [],
   "author": "",
