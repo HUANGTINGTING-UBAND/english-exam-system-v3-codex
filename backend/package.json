@@ -11,7 +11,8 @@
     "test:import:structured": "node scripts/test-import-structured.js",
     "test:import:pdf": "node scripts/test-import-pdf.js",
     "test:import:pdf:scanned": "node scripts/test-import-scanned-pdf.js",
-    "test:import:pdf:corrupted": "node scripts/test-import-corrupted-pdf.js"
+    "test:import:pdf:corrupted": "node scripts/test-import-corrupted-pdf.js",
+    "test:import:docx": "node scripts/test-import-docx.js"
   },
   "keywords": [],
   "author": "",
