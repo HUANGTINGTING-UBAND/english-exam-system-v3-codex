@@ -1675,11 +1675,39 @@ router.post('/import/jobs', requireTeacherOrAdmin, upload.single('file'), async 
   try {
     const uploadedText = await extractUploadedText(req.file)
     const body = req.body || {}
-    const rawText = uploadedText || body.rawText || ''
+    const pastedText = String(body.rawText || '')
+
+    const isPdfUpload = Boolean(
+      req.file
+      && (
+        req.file.mimetype === 'application/pdf'
+        || String(req.file.originalname || '').toLowerCase().endsWith('.pdf')
+      )
+    )
+
+    const meaningfulUploadedText = isPdfUpload
+      ? cleanPdfNoiseText(uploadedText)
+      : String(uploadedText || '')
+
+    const rawText = meaningfulUploadedText.trim()
+      ? uploadedText
+      : pastedText
+
     const title = body.title || (req.file ? req.file.originalname.replace(/\.[^.]+$/, '') : '') || '导入试卷草稿'
 
     if (!String(title).trim()) {
       return res.status(400).json({ message: '导入任务标题不能为空' })
+    }
+
+    if (
+      isPdfUpload
+      && !meaningfulUploadedText.trim()
+      && !pastedText.trim()
+    ) {
+      return res.status(400).json({
+        message: '该 PDF 未检测到可提取文字，可能是扫描件或图片型 PDF。请先进行 OCR，再重新上传。',
+        code: 'PDF_TEXT_NOT_FOUND',
+      })
     }
 
     if (!String(rawText).trim()) {

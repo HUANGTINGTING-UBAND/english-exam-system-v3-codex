@@ -9,7 +9,8 @@
     "test:db": "node scripts/test-db.js",
     "seed": "node scripts/seed.js",
     "test:import:structured": "node scripts/test-import-structured.js",
-    "test:import:pdf": "node scripts/test-import-pdf.js"
+    "test:import:pdf": "node scripts/test-import-pdf.js",
+    "test:import:pdf:scanned": "node scripts/test-import-scanned-pdf.js"
   },
   "keywords": [],
   "author": "",
