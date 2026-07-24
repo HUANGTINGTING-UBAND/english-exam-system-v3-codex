@@ -1673,7 +1673,6 @@ router.get('/teacher/assignments/:assignmentId/submissions', requireTeacher, asy
 
 router.post('/import/jobs', requireTeacherOrAdmin, upload.single('file'), async (req, res) => {
   try {
-    const uploadedText = await extractUploadedText(req.file)
     const body = req.body || {}
     const pastedText = String(body.rawText || '')
 
@@ -1684,6 +1683,23 @@ router.post('/import/jobs', requireTeacherOrAdmin, upload.single('file'), async 
         || String(req.file.originalname || '').toLowerCase().endsWith('.pdf')
       )
     )
+
+    let uploadedText = ''
+
+    try {
+      uploadedText = await extractUploadedText(req.file)
+    } catch (error) {
+      if (isPdfUpload) {
+        console.warn('PDF text extraction failed:', error.message)
+
+        return res.status(400).json({
+          message: '该 PDF 无法解析，可能已损坏、加密或格式异常。请重新导出为未加密的文字型 PDF 后再上传。',
+          code: 'PDF_PARSE_FAILED',
+        })
+      }
+
+      throw error
+    }
 
     const meaningfulUploadedText = isPdfUpload
       ? cleanPdfNoiseText(uploadedText)
