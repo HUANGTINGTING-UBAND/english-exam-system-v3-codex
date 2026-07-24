@@ -1172,7 +1172,9 @@ const extractUploadedText = async (file) => {
   if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
     return extractPdfText(file.buffer)
   }
-  return file.buffer.toString('utf8')
+  const error = new Error('Unsupported uploaded file type')
+  error.code = 'UNSUPPORTED_FILE_TYPE'
+  throw error
 }
 
 const assertTeacherOwnsClassroom = async (classroomId, teacherId) => {
@@ -1689,6 +1691,13 @@ router.post('/import/jobs', requireTeacherOrAdmin, upload.single('file'), async 
     try {
       uploadedText = await extractUploadedText(req.file)
     } catch (error) {
+      if (error.code === 'UNSUPPORTED_FILE_TYPE') {
+        return res.status(400).json({
+          message: '不支持该文件类型，仅支持 TXT、DOCX 和文字型 PDF。',
+          code: 'UNSUPPORTED_FILE_TYPE',
+        })
+      }
+
       if (isPdfUpload) {
         console.warn('PDF text extraction failed:', error.message)
 
