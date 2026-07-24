@@ -14,6 +14,23 @@ const {
 const router = express.Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
 
+const uploadImportFile = (req, res, next) => {
+  upload.single('file')(req, res, (error) => {
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        message: '上传文件不能超过 20 MB。',
+        code: 'FILE_TOO_LARGE',
+      })
+    }
+
+    if (error) {
+      return next(error)
+    }
+
+    return next()
+  })
+}
+
 const generateInviteCode = () => {
   return crypto.randomBytes(4).toString('hex').toUpperCase()
 }
@@ -1673,7 +1690,7 @@ router.get('/teacher/assignments/:assignmentId/submissions', requireTeacher, asy
   }
 })
 
-router.post('/import/jobs', requireTeacherOrAdmin, upload.single('file'), async (req, res) => {
+router.post('/import/jobs', requireTeacherOrAdmin, uploadImportFile, async (req, res) => {
   try {
     const body = req.body || {}
     const pastedText = String(body.rawText || '')

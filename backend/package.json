@@ -13,7 +13,8 @@
     "test:import:pdf:scanned": "node scripts/test-import-scanned-pdf.js",
     "test:import:pdf:corrupted": "node scripts/test-import-corrupted-pdf.js",
     "test:import:docx": "node scripts/test-import-docx.js",
-    "test:import:file:unsupported": "node scripts/test-import-unsupported-file.js"
+    "test:import:file:unsupported": "node scripts/test-import-unsupported-file.js",
+    "test:import:file:oversized": "node scripts/test-import-oversized-file.js"
   },
   "keywords": [],
   "author": "",
