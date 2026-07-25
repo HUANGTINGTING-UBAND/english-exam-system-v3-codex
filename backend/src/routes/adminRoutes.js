@@ -2,8 +2,7 @@ const express = require('express')
 const fs = require('fs/promises')
 const multer = require('multer')
 const mammoth = require('mammoth')
-const pdfParseModule = require('pdf-parse')
-const pdfParse = pdfParseModule.default || pdfParseModule
+const { extractPdfText } = require('../utils/pdfTextExtractor')
 const prisma = require('../lib/prisma')
 const { requireAdmin } = require('../middlewares/authMiddleware')
 
@@ -369,9 +368,7 @@ const readUploadedTextFile = async (file) => {
 
   if (lowerName.endsWith('.pdf')) {
     const buffer = await fs.readFile(file.path)
-    const result = await pdfParse(buffer)
-
-    return result.text || ''
+    return extractPdfText(buffer)
   }
 
   return ''

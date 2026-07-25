@@ -9,6 +9,12 @@ import AdminView from '../views/AdminView.vue'
 import AttemptDetailView from '../views/AttemptDetailView.vue'
 import WrongPracticeView from '../views/WrongPracticeView.vue'
 import AdminAttemptsView from '../views/AdminAttemptsView.vue'
+import TeacherDashboardView from '../views/TeacherDashboardView.vue'
+import TeacherClassroomsView from '../views/TeacherClassroomsView.vue'
+import TeacherAssignmentView from '../views/TeacherAssignmentView.vue'
+import StudentAssignmentsView from '../views/StudentAssignmentsView.vue'
+import ImportDraftView from '../views/ImportDraftView.vue'
+import SkillManageView from '../views/SkillManageView.vue'
 import { getSavedUser } from '../api/authApi'
 
 const routes = [
@@ -61,6 +67,61 @@ const routes = [
     name: 'register',
     component: RegisterView,
   },
+
+  {
+    path: '/teacher',
+    name: 'teacher-dashboard',
+    component: TeacherDashboardView,
+    meta: {
+      requiresAuth: true,
+      roles: ['TEACHER'],
+    },
+  },
+  {
+    path: '/teacher/classrooms',
+    name: 'teacher-classrooms',
+    component: TeacherClassroomsView,
+    meta: {
+      requiresAuth: true,
+      roles: ['TEACHER'],
+    },
+  },
+  {
+    path: '/teacher/assignments',
+    name: 'teacher-assignments',
+    component: TeacherAssignmentView,
+    meta: {
+      requiresAuth: true,
+      roles: ['TEACHER'],
+    },
+  },
+  {
+    path: '/student/assignments',
+    name: 'student-assignments',
+    component: StudentAssignmentsView,
+    meta: {
+      requiresAuth: true,
+      roles: ['STUDENT'],
+    },
+  },
+  {
+    path: '/import-drafts',
+    name: 'import-drafts',
+    component: ImportDraftView,
+    meta: {
+      requiresAuth: true,
+      roles: ['TEACHER', 'ADMIN'],
+    },
+  },
+  {
+    path: '/skills',
+    name: 'skills',
+    component: SkillManageView,
+    meta: {
+      requiresAuth: true,
+      roles: ['TEACHER', 'ADMIN'],
+    },
+  },
   {
     path: '/admin',
     name: 'admin',
@@ -104,6 +165,14 @@ router.beforeEach((to) => {
 
   if (to.meta.requiresAdmin && currentUser?.role !== 'ADMIN') {
     window.alert('你没有管理员权限，已返回个人中心。')
+
+    return {
+      path: '/profile',
+    }
+  }
+
+  if (to.meta.roles && !to.meta.roles.includes(currentUser?.role)) {
+    window.alert('当前账号没有访问该页面的权限。')
 
     return {
       path: '/profile',

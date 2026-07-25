@@ -1,0 +1,41 @@
+试卷标题: 标准阅读题基线测试 001
+考试类型: JUNIOR
+总分: 4
+时长: 30
+
+[MATERIAL]
+材料ID: reading-001
+材料类型: TEXT
+标题: Tom's School Day
+正文:
+Tom is a middle school student. He gets up at seven every morning. He goes to school by bus. His favorite subject is English because he thinks it is interesting.
+
+[QUESTION]
+题号: 1
+题型: CHOICE
+材料ID: reading-001
+题干: What time does Tom get up every morning?
+选项:
+A. At six.
+B. At seven.
+C. At eight.
+D. At nine.
+答案: B
+解析: 原文中写道 He gets up at seven every morning.
+知识点: 阅读理解-细节信息
+分值: 2
+
+[QUESTION]
+题号: 2
+题型: CHOICE
+材料ID: reading-001
+题干: Why does Tom like English?
+选项:
+A. Because it is easy.
+B. Because it is useful.
+C. Because it is interesting.
+D. Because his teacher is kind.
+答案: C
+解析: 原文中写道 he thinks it is interesting.
+知识点: 阅读理解-原因信息
+分值: 2

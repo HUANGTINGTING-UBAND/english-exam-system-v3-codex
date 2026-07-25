@@ -40,6 +40,7 @@ const startedAt = ref(null)
 const submittedAt = ref(null)
 
 const examId = computed(() => route.params.examId)
+const assignmentId = computed(() => route.query.assignmentId || '')
 
 const currentExam = computed(() => {
   return examData.value
@@ -260,7 +261,7 @@ const getQuestionNavClass = (question, index) => {
 }
 
 const getProgressStorageKey = () => {
-  return `exam-progress-${examId.value}`
+  return `exam-progress-${examId.value}${assignmentId.value ? `-assignment-${assignmentId.value}` : ''}`
 }
 
 const saveProgress = () => {
@@ -532,6 +533,7 @@ const goToQuestion = (index) => {
 const buildAttemptPayload = (type) => {
   return {
     examId: examId.value,
+    assignmentId: assignmentId.value || null,
     objectiveScore: objectiveScore.value,
     subjectiveScore: subjectiveScore.value,
     totalScore: totalScore.value,
@@ -708,6 +710,7 @@ onBeforeUnmount(() => {
 
       <div class="exam-notice">
         <h2>考试说明</h2>
+        <p v-if="assignmentId" class="api-success">当前从班级任务进入，提交后成绩会同步给教师查看。</p>
         <ul>
           <li>点击“开始考试”前，请先登录账号，系统会保存你的考试记录和错题。</li>
           <li>考试过程中可暂停，暂停时不允许继续答题。</li>
@@ -947,6 +950,12 @@ onBeforeUnmount(() => {
           >
             {{ isCurrentQuestionAnswered ? '当前题：已答' : '当前题：未答' }}
           </p>
+
+          <div v-if="currentQuestion.material" class="reading-material-card">
+            <p class="tag">Question Material</p>
+            <h3>{{ currentQuestion.material.title || '阅读材料' }}</h3>
+            <p class="material-content">{{ currentQuestion.material.content || currentQuestion.material.transcript }}</p>
+          </div>
 
           <h2>{{ currentQuestion.text }}</h2>
 

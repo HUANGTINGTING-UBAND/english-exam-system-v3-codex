@@ -9,6 +9,7 @@ const adminImportRoutes = require('./src/routes/adminImportRoutes')
 const resultRoutes = require('./src/routes/resultRoutes')
 const wrongPracticeRoutes = require('./src/routes/wrongPracticeRoutes')
 const adminAttemptRoutes = require('./src/routes/adminAttemptRoutes')
+const platformRoutes = require('./src/routes/platformRoutes')
 
 const app = express()
 
@@ -107,6 +108,7 @@ const routeList = [
   ['resultRoutes', resultRoutes],
   ['wrongPracticeRoutes', wrongPracticeRoutes],
   ['adminAttemptRoutes', adminAttemptRoutes],
+  ['platformRoutes', platformRoutes],
 ]
 
 for (const [routeName, routeHandler] of routeList) {

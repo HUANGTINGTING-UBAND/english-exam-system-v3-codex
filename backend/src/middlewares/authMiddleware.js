@@ -50,33 +50,31 @@ const requireAuth = async (req, res, next) => {
   }
 }
 
-const requireAdmin = async (req, res, next) => {
-  try {
-    const user = await getUserFromToken(req)
-
-    if (!user) {
-      return res.status(401).json({
-        message: '请先登录管理员账号',
-      })
+const requireRole = (...allowedRoles) => {
+  return async (req, res, next) => {
+    if (!req.user) {
+      return requireAuth(req, res, () => requireRole(...allowedRoles)(req, res, next))
     }
 
-    if (user.role !== 'ADMIN') {
+    if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
-        message: '当前账号没有管理员权限',
+        message: '当前账号没有访问权限',
       })
     }
 
-    req.user = user
     next()
-  } catch (error) {
-    return res.status(401).json({
-      message: '登录状态无效或已过期',
-    })
   }
 }
+
+const requireTeacher = [requireAuth, requireRole('TEACHER')]
+const requireTeacherOrAdmin = [requireAuth, requireRole('TEACHER', 'ADMIN')]
+const requireAdmin = [requireAuth, requireRole('ADMIN')]
 
 module.exports = {
   optionalAuth,
   requireAuth,
+  requireRole,
+  requireTeacher,
+  requireTeacherOrAdmin,
   requireAdmin,
 }

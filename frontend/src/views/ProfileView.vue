@@ -29,6 +29,7 @@ const isLoggedIn = computed(() => {
 
 const roleNameMap = {
   STUDENT: '学生',
+  TEACHER: '教师',
   ADMIN: '管理员',
 }
 
@@ -442,6 +443,22 @@ onMounted(() => {
         </div>
 
         <div class="profile-actions">
+          <RouterLink
+            v-if="currentUser.role === 'STUDENT'"
+            class="secondary-btn"
+            to="/student/assignments"
+          >
+            我的班级任务
+          </RouterLink>
+
+          <RouterLink
+            v-if="currentUser.role === 'TEACHER'"
+            class="secondary-btn"
+            to="/teacher"
+          >
+            教师工作台
+          </RouterLink>
+
           <RouterLink
             v-if="currentUser.role === 'ADMIN'"
             class="secondary-btn"

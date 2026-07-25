@@ -8,6 +8,8 @@ const router = useRouter()
 const username = ref('')
 const nickname = ref('')
 const password = ref('')
+const role = ref('STUDENT')
+const teacherCode = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 
@@ -31,6 +33,8 @@ const handleRegister = async () => {
       username: username.value,
       nickname: nickname.value || username.value,
       password: password.value,
+      role: role.value,
+      teacherCode: role.value === 'TEACHER' ? teacherCode.value : undefined,
     })
 
     saveAuthData(authData)
@@ -73,6 +77,23 @@ const handleRegister = async () => {
           v-model="nickname"
           type="text"
           placeholder="请输入昵称，可不填"
+        />
+      </label>
+
+      <label>
+        注册身份
+        <select v-model="role">
+          <option value="STUDENT">学生</option>
+          <option value="TEACHER">教师</option>
+        </select>
+      </label>
+
+      <label v-if="role === 'TEACHER'">
+        教师注册码
+        <input
+          v-model="teacherCode"
+          type="text"
+          placeholder="请输入教师注册码"
         />
       </label>
 

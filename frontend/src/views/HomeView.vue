@@ -42,6 +42,22 @@ onMounted(() => {
             </RouterLink>
 
             <RouterLink
+              v-if="currentUser.role === 'STUDENT'"
+              class="home-auth-link"
+              to="/student/assignments"
+            >
+              我的班级任务
+            </RouterLink>
+
+            <RouterLink
+              v-if="currentUser.role === 'TEACHER'"
+              class="home-auth-link"
+              to="/teacher"
+            >
+              教师工作台
+            </RouterLink>
+
+            <RouterLink
               v-if="currentUser.role === 'ADMIN'"
               class="home-auth-link"
               to="/admin"
@@ -183,6 +199,13 @@ onMounted(() => {
             <h3>学生端</h3>
             <p>
               注册登录、试卷练习、考试提交、结果详情、错题本、错题重练和学习建议。
+            </p>
+          </div>
+
+          <div class="home-module-card">
+            <h3>教师端</h3>
+            <p>
+              创建班级、发布考试任务、查看学生提交情况和班级成绩。
             </p>
           </div>
 
